@@ -3,6 +3,7 @@ import { api, json } from './messagingApi'
 import './Messaging.css'
 import MeetingPanel from './MeetingPanel'
 import { ReportForm } from './Community'
+import { supabase } from './supabase'
 
 export function ConnectionRequestForm({
   student,
@@ -274,20 +275,19 @@ export function Conversation({ requestId, user }) {
   const [reportedMessage, setReportedMessage] = useState(null)
   const log = useRef(null)
   useEffect(() => {
+    let active = true
     const controller = new AbortController()
-    let cursor = 0
-    let timer
-    async function poll() {
+
+    async function loadMessages() {
       try {
         const data = await api(
-          `/api/requests/${requestId}/messages?after_id=${cursor}`,
+          `/api/requests/${requestId}/messages?after_id=0`,
           { signal: controller.signal },
         )
-        if (controller.signal.aborted) return
+        if (!active || controller.signal.aborted) return
         setRecord(data.request)
         setError('')
-        if (data.messages.length) {
-          cursor = data.messages[data.messages.length - 1].id
+        if (data.messages) {
           setMessages((previous) =>
             [
               ...new Map(
@@ -297,19 +297,49 @@ export function Conversation({ requestId, user }) {
           )
         }
         setLoading(false)
-        timer = setTimeout(poll, data.has_more ? 0 : 3000)
       } catch (err) {
-        if (!controller.signal.aborted) {
+        if (active && !controller.signal.aborted) {
           setError(err.message)
           setLoading(false)
-          timer = setTimeout(poll, 5000)
         }
       }
     }
-    poll()
+
+    loadMessages()
+
+    if (!supabase) {
+      return () => {
+        active = false
+        controller.abort()
+      }
+    }
+
+    const channel = supabase
+      .channel(`chat_messages:${requestId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `request_id=eq.${requestId}`,
+        },
+        (payload) => {
+          if (!active) return
+          const newMsg = payload.new
+          setMessages((previous) =>
+            [
+              ...new Map([...previous, newMsg].map((m) => [m.id, m])).values(),
+            ].sort((a, b) => a.id - b.id),
+          )
+        },
+      )
+      .subscribe()
+
     return () => {
+      active = false
       controller.abort()
-      clearTimeout(timer)
+      supabase.removeChannel(channel)
     }
   }, [requestId])
   useEffect(() => {

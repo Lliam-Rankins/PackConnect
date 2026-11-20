@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, json } from './messagingApi'
 import './NotificationBell.css'
+import { supabase } from './supabase'
 
 function describe(item) {
   if (item.kind === 'request_received')
@@ -18,7 +19,7 @@ function describe(item) {
   return `${item.actor_name} sent you a message.`
 }
 
-export default function NotificationBell({ route }) {
+export default function NotificationBell({ route, user }) {
   const [open, setOpen] = useState(false)
   const [feed, setFeed] = useState({ notifications: [], unread_count: 0 })
   const [loading, setLoading] = useState(true)
@@ -46,7 +47,9 @@ export default function NotificationBell({ route }) {
     async function refresh() {
       if (stopped) return
       if (actionBusy.current) {
-        timer = setTimeout(refresh, 5000)
+        if (!supabase) {
+          timer = setTimeout(refresh, 5000)
+        }
         return
       }
       controller = new AbortController()
@@ -74,17 +77,46 @@ export default function NotificationBell({ route }) {
       } finally {
         if (!stopped) {
           setLoading(false)
-          timer = setTimeout(refresh, 5000)
+          if (!supabase) {
+            timer = setTimeout(refresh, 5000)
+          }
         }
       }
     }
     refresh()
+
+    if (!supabase) {
+      return () => {
+        stopped = true
+        controller?.abort()
+        clearTimeout(timer)
+      }
+    }
+
+    const filter = user?.id ? `user_id=eq.${user.id}` : undefined
+    const channel = supabase
+      .channel(`notifications:${user?.id || 'all'}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          ...(filter ? { filter } : {}),
+        },
+        () => {
+          if (!stopped) refresh()
+        },
+      )
+      .subscribe()
+
     return () => {
       stopped = true
       controller?.abort()
       clearTimeout(timer)
+      supabase.removeChannel(channel)
     }
-  }, [route, open])
+  }, [route, open, user?.id])
 
   useEffect(() => {
     if (!open) return

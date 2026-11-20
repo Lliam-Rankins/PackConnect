@@ -1,10 +1,25 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ConnectionRequestForm, RequestInbox, Conversation } from './Messaging'
 import { deferred, request, response, student } from './test/fixtures'
 
 vi.mock('./MeetingPanel', () => ({ default: () => null }))
+
+let realtimeCallback = null
+const mockChannel = {
+  on: vi.fn((event, config, cb) => {
+    realtimeCallback = cb
+    return mockChannel
+  }),
+  subscribe: vi.fn(() => mockChannel),
+}
+vi.mock('./supabase', () => ({
+  supabase: {
+    channel: vi.fn(() => mockChannel),
+    removeChannel: vi.fn(),
+  },
+}))
 
 async function fillRequest(user) {
   await user.type(
@@ -344,5 +359,33 @@ describe('accepted-request conversation', () => {
     expect(
       screen.queryByRole('button', { name: 'Send message' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('subscribes to realtime updates and displays incoming messages immediately', async () => {
+    fetch.mockResolvedValue(
+      response({
+        request: { ...request, status: 'accepted' },
+        messages: [],
+        has_more: false,
+      }),
+    )
+    render(<Conversation requestId={7} user={student} />)
+    await screen.findByRole('heading', { name: 'Chat with Sam Lee' })
+    expect(screen.getByText(/Say hello/)).toBeInTheDocument()
+
+    act(() => {
+      realtimeCallback?.({
+        new: {
+          id: 10,
+          sender_id: 2,
+          body: 'Hello from Supabase Realtime!',
+          created_at: request.created_at,
+        },
+      })
+    })
+
+    expect(
+      await screen.findByText('Hello from Supabase Realtime!'),
+    ).toBeInTheDocument()
   })
 })

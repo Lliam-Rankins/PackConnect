@@ -40,10 +40,12 @@ including reverse-direction requests. A declined pair may create a new request.
 Repeating the same decision is idempotent; changing a completed decision returns
 409. SQL constraints and a conditional update enforce these rules in storage.
 
-Chat history is ordered by message ID and retrieved incrementally. Both request
-participants can send messages; no third account can join. Original request text
-is displayed as conversation context. The frontend polls chats every three
-seconds and refreshes request lists on navigation and every eight seconds.
+Chat history is ordered by message ID and retrieved initially on conversation open.
+Both request participants can send messages; no third account can join. Original
+request text is displayed as conversation context. The frontend subscribes to
+Supabase Realtime WebSockets (`chat_messages` table events) for immediate, zero-latency
+message delivery. If Supabase credentials are not configured, the frontend gracefully
+falls back to short polling. Request lists refresh on navigation and every eight seconds.
 
 ## Existing messages
 
@@ -72,10 +74,11 @@ third-user denial, and mobile layout.
 
 In-app bell notifications cover requests, decisions, and new messages. This
 implementation has no email/push notifications, read receipts, attachments,
-blocking, or message deletion. It uses polling, not WebSockets. Access is private
-at the application API level; this does not claim end-to-end encryption. Configure
-a persistent private `FLASK_SECRET_KEY` for sessions across backend restarts and
-HTTPS with `COOKIE_SECURE=true` for deployment, as described in README.
+or message deletion. Real-time updates utilize Supabase Realtime WebSockets for
+conversations and notification alerts, eliminating background polling overhead when
+configured. Access is private at the application API level; this does not claim
+end-to-end encryption. Configure a persistent private `FLASK_SECRET_KEY` for sessions
+across backend restarts and HTTPS with `COOKIE_SECURE=true` for deployment, as described in README.
 
 ## Notification API
 
@@ -88,6 +91,6 @@ Authentication is required. Other users' notification IDs return 404. Notificati
 creation shares the request/decision/message transaction; repeated decisions do
 not generate duplicate alerts. Existing pending requests and completed decisions
 are backfilled using unique event keys, preserving read state on later startups.
-The frontend polls every five seconds, marks clicked alerts read, and supports
+The frontend receives real-time updates for new notifications (falling back to five-second polling if Supabase is unconfigured), marks clicked alerts read, and supports
 outside-click/Escape dismissal. New-message alerts link to the accepted chat;
 request-received alerts open Incoming and declined decisions open Outgoing.

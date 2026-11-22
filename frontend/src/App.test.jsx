@@ -50,6 +50,38 @@ function holdSearch() {
 const writes = () =>
   fetch.mock.calls.filter(([, options]) => options?.method === 'PUT')
 
+it('shows advisor ratings and course feedback on the profile page', async () => {
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation((url, options) =>
+    url === '/api/students/1' && !options?.method
+      ? Promise.resolve(
+          response({
+            student: {
+              ...student,
+              review_summary: { review_count: 1, average_rating: 4 },
+              reviews: [
+                {
+                  request_id: 7,
+                  rating: 4,
+                  course_code: 'CSC 510',
+                  comment: 'Helpful course advice.',
+                  created_at: request.created_at,
+                },
+              ],
+            },
+          }),
+        )
+      : normalFetch(url, options),
+  )
+  render(<Workspace initialRoute="app/profile" />)
+  expect(
+    await screen.findByRole('heading', { name: 'Advice helpfulness' }),
+  ).toBeInTheDocument()
+  expect(screen.getByText('4.0 / 5')).toBeInTheDocument()
+  expect(screen.getByText('1 review')).toBeInTheDocument()
+  expect(screen.getByText('Helpful course advice.')).toBeInTheDocument()
+})
+
 describe('peer search', () => {
   it('searches with the selected suggestion and preserves advanced filters', async () => {
     const user = userEvent.setup()

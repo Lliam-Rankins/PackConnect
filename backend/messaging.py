@@ -48,10 +48,12 @@ def create_messaging_blueprint(get_db):
 
     def get_request(db, request_id, lock=False):
         row = db.execute("""
-            SELECT r.*, s.name AS sender_name, t.name AS recipient_name
+            SELECT r.*, s.name AS sender_name, t.name AS recipient_name,
+                   v.rating AS review_rating, v.comment AS review_comment
             FROM advice_requests r
             JOIN students s ON s.id = r.sender_id
             JOIN students t ON t.id = r.recipient_id
+            LEFT JOIN advice_reviews v ON v.request_id = r.id
             WHERE r.id = %s AND (r.sender_id = %s OR r.recipient_id = %s)
         """ + (" FOR UPDATE OF r" if lock else ""),
                          (request_id, session["student_id"], session["student_id"])).fetchone()
@@ -63,10 +65,12 @@ def create_messaging_blueprint(get_db):
         with request_database() as db:
             expire_requests(db, student_id=session["student_id"])
             rows = db.execute("""
-                SELECT r.*, s.name AS sender_name, t.name AS recipient_name
+                SELECT r.*, s.name AS sender_name, t.name AS recipient_name,
+                       v.rating AS review_rating, v.comment AS review_comment
                 FROM advice_requests r
                 JOIN students s ON s.id = r.sender_id
                 JOIN students t ON t.id = r.recipient_id
+                LEFT JOIN advice_reviews v ON v.request_id = r.id
                 WHERE r.sender_id = %s OR r.recipient_id = %s
                 ORDER BY r.id DESC
             """, (session["student_id"], session["student_id"])).fetchall()
@@ -167,6 +171,38 @@ def create_messaging_blueprint(get_db):
                 """, (record["sender_id"], session["student_id"], request_id,
                       data["status"], f"decision:{request_id}"))
         return jsonify({"request": result})
+
+    @api.route("/api/requests/<int:request_id>/review", methods=["POST"])
+    @authenticated
+    def review_advisor(request_id):
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="Send a JSON object with your rating and optional comment."), 400
+        rating = data.get("rating")
+        comment = data.get("comment", "")
+        if type(rating) is not int or not 1 <= rating <= 5:
+            return jsonify(error="Choose a whole-number rating from 1 to 5."), 400
+        if not isinstance(comment, str) or len(comment.strip()) > 1000:
+            return jsonify(error="Feedback must contain at most 1,000 characters."), 400
+
+        with request_database() as db:
+            # Serialize submissions for this request, including retries from other tabs.
+            record = get_request(db, request_id, lock=True)
+            if record is None:
+                return jsonify(error="Request not found."), 404
+            if record["sender_id"] != session["student_id"]:
+                return jsonify(error="Only the student who requested advice can review the advisor."), 403
+            if record["status"] != "completed":
+                return jsonify(error="Complete this advice before submitting a review."), 409
+            review = db.execute("""
+                INSERT INTO advice_reviews (request_id, rating, comment)
+                VALUES (%s, %s, %s) ON CONFLICT (request_id) DO NOTHING
+                RETURNING request_id, rating, comment, created_at
+            """, (request_id, rating, comment.strip())).fetchone()
+            if review is None:
+                return jsonify(error="You already reviewed this advice request."), 409
+            result = {**dict(review), "course_code": record["course_code"]}
+        return jsonify(review=result), 201
 
     @api.route("/api/requests/<int:request_id>/messages", methods=["GET", "POST"])
     @authenticated

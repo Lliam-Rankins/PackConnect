@@ -127,11 +127,13 @@ class SupabaseAuthenticationTests(PostgresTestCase):
         self.assertEqual(response.get_json()["request"]["sender_id"], self.student_id)
 
     def test_course_suggestions_follow_supabase_confirmation_without_first_login(self):
-        self.assertEqual(self.client.get('/api/courses?q=csc5').get_json(), {"courses": ["CSC 510"]})
+        self.assertEqual(self.client.get('/api/courses?q=csc5').get_json()["courses"], ["CSC 510"])
+        self.assertEqual(self.client.get('/api/courses?q=software+engineering').get_json()["courses"], ["CSC 510"])
         self.factory.assert_not_called()
         with portal.get_db() as db:
             db.execute("UPDATE auth.users SET email_confirmed_at = NULL WHERE id = %s", (self.auth_id,))
-        self.assertEqual(self.client.get('/api/courses?q=CSC').get_json(), {"courses": []})
+        self.assertEqual(self.client.get('/api/courses?q=CSC').get_json()["courses"], [])
+        self.assertEqual(self.client.get('/api/courses?q=software+engineering').get_json()["courses"], [])
 
     def test_wrong_provider_password_does_not_create_session(self):
         self.provider.auth.sign_in_with_password.side_effect = AuthApiError("Invalid credentials", 400, "invalid_credentials")

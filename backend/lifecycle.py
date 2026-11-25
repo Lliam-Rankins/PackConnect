@@ -1,5 +1,7 @@
 """Request expiration and contact rules shared by app routes and maintenance."""
 
+from live_updates import signal
+
 
 def blocked(db, first, second):
     return bool(
@@ -20,11 +22,13 @@ def lock_students(db, *ids):
 
 
 def notify(db, user_id, actor_id, request_id, kind, event_key):
-    db.execute(
+    created = db.execute(
         """INSERT INTO notifications(user_id,actor_id,request_id,kind,event_key)
         VALUES (%s,%s,%s,%s,%s) ON CONFLICT(event_key) DO NOTHING""",
         (user_id, actor_id, request_id, kind, event_key),
-    )
+    ).rowcount
+    if created:
+        signal(db, user_id)
 
 
 def expire_requests(db, student_id=None, recipient_id=None):

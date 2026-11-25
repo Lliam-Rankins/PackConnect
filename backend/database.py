@@ -9,6 +9,8 @@ from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from live_updates import publish
+
 
 _pools = {}
 _pool_lock = Lock()
@@ -49,4 +51,8 @@ def connect_database(database_url, schema=None):
     with connection_pool(database_url).connection() as db:
         if schema:
             db.execute(sql.SQL("SET LOCAL search_path TO {}, public").format(sql.Identifier(schema)))
+        db.signals = set()
         yield db
+        signals = db.signals
+    # Reached only after a successful commit, with the connection back in the pool.
+    publish(signals)

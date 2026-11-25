@@ -3,7 +3,7 @@ import { api, json } from './messagingApi'
 import './Messaging.css'
 import MeetingPanel from './MeetingPanel'
 import { ReportForm } from './Community'
-import { supabase } from './supabase'
+import { isConnected, subscribe } from './realtime'
 
 export function ConnectionRequestForm({
   student,
@@ -275,71 +275,66 @@ export function Conversation({ requestId, user }) {
   const [reportedMessage, setReportedMessage] = useState(null)
   const log = useRef(null)
   useEffect(() => {
-    let active = true
     const controller = new AbortController()
+    let cursor = 0
+    let timer
+    let running = false
+    let again = false
 
-    async function loadMessages() {
+    async function load() {
+      if (running) {
+        again = true
+        return
+      }
+      running = true
+      clearTimeout(timer)
+      let failed = false
       try {
-        const data = await api(
-          `/api/requests/${requestId}/messages?after_id=0`,
-          { signal: controller.signal },
-        )
-        if (!active || controller.signal.aborted) return
-        setRecord(data.request)
-        setError('')
-        if (data.messages) {
-          setMessages((previous) =>
-            [
-              ...new Map(
-                [...previous, ...data.messages].map((m) => [m.id, m]),
-              ).values(),
-            ].sort((a, b) => a.id - b.id),
+        let more
+        do {
+          const data = await api(
+            `/api/requests/${requestId}/messages?after_id=${cursor}`,
+            { signal: controller.signal },
           )
-        }
-        setLoading(false)
-      } catch (err) {
-        if (active && !controller.signal.aborted) {
-          setError(err.message)
+          if (controller.signal.aborted) return
+          setRecord(data.request)
+          setError('')
+          if (data.messages.length) {
+            cursor = data.messages[data.messages.length - 1].id
+            setMessages((previous) =>
+              [
+                ...new Map(
+                  [...previous, ...data.messages].map((m) => [m.id, m]),
+                ).values(),
+              ].sort((a, b) => a.id - b.id),
+            )
+          }
           setLoading(false)
-        }
+          more = data.has_more
+        } while (more)
+      } catch (err) {
+        if (controller.signal.aborted) return
+        failed = true
+        setError(err.message)
+        setLoading(false)
+      }
+      running = false
+      if (again) {
+        again = false
+        load()
+      } else {
+        // Polling is the fallback for signals that never arrive.
+        timer = setTimeout(load, isConnected() ? 30000 : failed ? 5000 : 3000)
       }
     }
 
-    loadMessages()
-
-    if (!supabase) {
-      return () => {
-        active = false
-        controller.abort()
-      }
-    }
-
-    const channel = supabase
-      .channel(`chat_messages:${requestId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `request_id=eq.${requestId}`,
-        },
-        (payload) => {
-          if (!active) return
-          const newMsg = payload.new
-          setMessages((previous) =>
-            [
-              ...new Map([...previous, newMsg].map((m) => [m.id, m])).values(),
-            ].sort((a, b) => a.id - b.id),
-          )
-        },
-      )
-      .subscribe()
+    const unsubscribe = subscribe(load)
+    load()
 
     return () => {
-      active = false
       controller.abort()
-      supabase.removeChannel(channel)
+      clearTimeout(timer)
+      unsubscribe()
     }
   }, [requestId])
   useEffect(() => {

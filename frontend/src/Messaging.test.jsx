@@ -2,24 +2,10 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ConnectionRequestForm, RequestInbox, Conversation } from './Messaging'
+import { subscribe } from './realtime'
 import { deferred, request, response, student } from './test/fixtures'
 
 vi.mock('./MeetingPanel', () => ({ default: () => null }))
-
-let realtimeCallback = null
-const mockChannel = {
-  on: vi.fn((event, config, cb) => {
-    realtimeCallback = cb
-    return mockChannel
-  }),
-  subscribe: vi.fn(() => mockChannel),
-}
-vi.mock('./supabase', () => ({
-  supabase: {
-    channel: vi.fn(() => mockChannel),
-    removeChannel: vi.fn(),
-  },
-}))
 
 async function fillRequest(user) {
   await user.type(
@@ -361,31 +347,31 @@ describe('accepted-request conversation', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('subscribes to realtime updates and displays incoming messages immediately', async () => {
-    fetch.mockResolvedValue(
+  it('loads every page, then fetches after the last message on a signal', async () => {
+    let signal
+    vi.mocked(subscribe).mockImplementation((listener) => {
+      signal = listener
+      return () => {}
+    })
+    const page = (id, body, has_more = false) =>
       response({
         request: { ...request, status: 'accepted' },
-        messages: [],
-        has_more: false,
-      }),
-    )
-    render(<Conversation requestId={7} user={student} />)
-    await screen.findByRole('heading', { name: 'Chat with Sam Lee' })
-    expect(screen.getByText(/Say hello/)).toBeInTheDocument()
-
-    act(() => {
-      realtimeCallback?.({
-        new: {
-          id: 10,
-          sender_id: 2,
-          body: 'Hello from Supabase Realtime!',
-          created_at: request.created_at,
-        },
+        messages: [{ id, sender_id: 2, body, created_at: request.created_at }],
+        has_more,
       })
-    })
+    fetch
+      .mockResolvedValueOnce(page(100, 'Older message', true))
+      .mockResolvedValueOnce(page(101, 'Newer message'))
+      .mockResolvedValueOnce(page(102, 'Signaled message'))
+    render(<Conversation requestId={7} user={student} />)
+    expect(await screen.findByText('Newer message')).toBeInTheDocument()
+    expect(screen.getByText('Older message')).toBeInTheDocument()
 
-    expect(
-      await screen.findByText('Hello from Supabase Realtime!'),
-    ).toBeInTheDocument()
+    await act(() => signal())
+
+    expect(await screen.findByText('Signaled message')).toBeInTheDocument()
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(
+      [0, 100, 101].map((id) => `/api/requests/7/messages?after_id=${id}`),
+    )
   })
 })

@@ -2,6 +2,7 @@
 
 import os
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 import psycopg
@@ -25,6 +26,10 @@ class PostgresTestCase(unittest.TestCase):
         portal.app.config["SUPABASE_DB_URL"] = database_url
         portal.app.config["TEST_DB_SCHEMA"] = self.schema
         self.addCleanup(self.restore_database)
+        # A developer's backend/.env must not make tests call a real Supabase project.
+        realtime_off = patch.dict(os.environ, {"SUPABASE_SECRET_KEY": ""})
+        realtime_off.start()
+        self.addCleanup(realtime_off.stop)
         with psycopg.connect(database_url, autocommit=True) as db:
             db.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(self.schema)))
             self.addCleanup(self.drop_schema, database_url)

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, json } from './messagingApi'
 import './NotificationBell.css'
-import { supabase } from './supabase'
+import { isConnected, subscribe } from './realtime'
 
 function describe(item) {
   if (item.kind === 'request_received')
@@ -19,7 +19,7 @@ function describe(item) {
   return `${item.actor_name} sent you a message.`
 }
 
-export default function NotificationBell({ route, user }) {
+export default function NotificationBell({ route }) {
   const [open, setOpen] = useState(false)
   const [feed, setFeed] = useState({ notifications: [], unread_count: 0 })
   const [loading, setLoading] = useState(true)
@@ -44,14 +44,20 @@ export default function NotificationBell({ route, user }) {
     let stopped = false
     let timer
     let controller
+    let running = false
+    let again = false
     async function refresh() {
       if (stopped) return
-      if (actionBusy.current) {
-        if (!supabase) {
-          timer = setTimeout(refresh, 5000)
-        }
+      if (running) {
+        again = true
         return
       }
+      clearTimeout(timer)
+      if (actionBusy.current) {
+        timer = setTimeout(refresh, 1000)
+        return
+      }
+      running = true
       controller = new AbortController()
       pollRequest.current = controller
       const version = revision.current
@@ -75,48 +81,30 @@ export default function NotificationBell({ route, user }) {
         )
           setError(err.message)
       } finally {
+        running = false
         if (!stopped) {
           setLoading(false)
-          if (!supabase) {
-            timer = setTimeout(refresh, 5000)
+          if (again) {
+            again = false
+            refresh()
+          } else {
+            // A fetch overtaken by a read action is retried soon.
+            const delay =
+              version !== revision.current ? 1000 : isConnected() ? 30000 : 5000
+            timer = setTimeout(refresh, delay)
           }
         }
       }
     }
+    const unsubscribe = subscribe(refresh)
     refresh()
-
-    if (!supabase) {
-      return () => {
-        stopped = true
-        controller?.abort()
-        clearTimeout(timer)
-      }
-    }
-
-    const filter = user?.id ? `user_id=eq.${user.id}` : undefined
-    const channel = supabase
-      .channel(`notifications:${user?.id || 'all'}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          ...(filter ? { filter } : {}),
-        },
-        () => {
-          if (!stopped) refresh()
-        },
-      )
-      .subscribe()
-
     return () => {
       stopped = true
       controller?.abort()
       clearTimeout(timer)
-      supabase.removeChannel(channel)
+      unsubscribe()
     }
-  }, [route, open, user?.id])
+  }, [route, open])
 
   useEffect(() => {
     if (!open) return

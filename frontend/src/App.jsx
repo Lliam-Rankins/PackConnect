@@ -379,7 +379,7 @@ function App({ user, onLogout, route, onUserUpdated }) {
           <div className="header-actions">
             <span className="university">NC State University</span>
             <span className="signed-in-name">{user.name}</span>
-            <NotificationBell route={route} user={user} />
+            <NotificationBell route={route} />
             <button className="profile-button" onClick={onLogout}>
               Sign out
             </button>

@@ -10,6 +10,7 @@ from pathlib import Path
 from messaging import create_messaging_blueprint, initialize_messaging
 from database import connect_database
 from identity import registered_student_sql, session_student_id
+from course_qa import create_course_qa_blueprint
 from community import create_community_blueprint
 from meetings import create_meetings_blueprint
 from recovery import create_recovery_blueprint
@@ -71,6 +72,7 @@ def get_db():
 
 app.register_blueprint(create_messaging_blueprint(get_db))
 app.register_blueprint(create_community_blueprint(get_db))
+app.register_blueprint(create_course_qa_blueprint(get_db))
 app.register_blueprint(create_meetings_blueprint(get_db))
 app.register_blueprint(create_recovery_blueprint(get_db))
 

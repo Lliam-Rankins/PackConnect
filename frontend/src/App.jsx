@@ -12,6 +12,7 @@ import {
 import CourseAutocomplete from './CourseAutocomplete'
 import { availabilityLabel, capacityLabel } from './advisorAvailability'
 import { AdvisorReviews } from './AdvisorReviews'
+import CourseQA from './CourseQA'
 
 const API_URL = ''
 
@@ -55,6 +56,7 @@ function courseKey(value) {
 
 function App({ user, onLogout, route, onUserUpdated }) {
   const isSearchPage = route === 'app'
+  const isQAPage = route === 'app/qa' || /^app\/qa\/[1-9]\d*$/.test(route)
   const profileId = /^app\/students\/[1-9]\d*$/.test(route)
     ? Number(route.split('/')[2])
     : ['app/profile', 'app/profile/edit'].includes(route)
@@ -434,6 +436,9 @@ function App({ user, onLogout, route, onUserUpdated }) {
           >
             Conversations
           </a>
+          <a href="#/app/qa" aria-current={isQAPage ? 'page' : undefined}>
+            Course Q&amp;A
+          </a>
           <a href="#/app/blocked">Blocked students</a>
           {user.is_moderator && <a href="#/app/moderation">Report review</a>}
           <a href="#/about">About</a>
@@ -449,6 +454,13 @@ function App({ user, onLogout, route, onUserUpdated }) {
           <div className="success-message" role="status">
             {notice}
           </div>
+        )}
+        {isQAPage && (
+          <CourseQA
+            key={route}
+            user={user}
+            questionId={route === 'app/qa' ? null : route.split('/')[2]}
+          />
         )}
         {route === 'app/conversations' && <ConversationInbox />}
         {route === 'app/blocked' && <BlockedStudents />}
@@ -865,6 +877,7 @@ function App({ user, onLogout, route, onUserUpdated }) {
           </p>
         )}
         {!isSearchPage &&
+          !isQAPage &&
           !profileId &&
           !chatId &&
           ![

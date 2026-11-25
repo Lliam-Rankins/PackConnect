@@ -127,7 +127,7 @@ export default function AuthShell() {
       window.location.hash = '/login'
     if (user && (route === 'login' || route === 'register'))
       window.location.hash = '/app'
-    document.title = `${pages[route]?.title || { 'app/conversations': 'Conversations', 'app/blocked': 'Blocked students', 'app/moderation': 'Report review', 'forgot-password': 'Recover account' }[route] || (route.startsWith('reset-password') ? 'Reset password' : route.startsWith('app/profile') ? 'My profile' : route.startsWith('app/students/') ? 'Student profile' : route.startsWith('app/chat/') ? 'Conversation' : route.startsWith('app/requests') ? 'Advice requests' : route === 'app' ? 'Find your people' : route === 'register' ? 'Create account' : 'Sign in')} | PackConnect`
+    document.title = `${pages[route]?.title || { 'app/conversations': 'Conversations', 'app/blocked': 'Blocked students', 'app/moderation': 'Report review', 'forgot-password': 'Recover account' }[route] || (route.startsWith('app/qa') ? 'Course Q&A' : route.startsWith('reset-password') ? 'Reset password' : route.startsWith('app/profile') ? 'My profile' : route.startsWith('app/students/') ? 'Student profile' : route.startsWith('app/chat/') ? 'Conversation' : route.startsWith('app/requests') ? 'Advice requests' : route === 'app' ? 'Find your people' : route === 'register' ? 'Create account' : 'Sign in')} | PackConnect`
   }, [route, user, checking])
 
   async function signIn(event) {

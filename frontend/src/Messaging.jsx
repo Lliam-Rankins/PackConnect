@@ -3,6 +3,8 @@ import { api, json } from './messagingApi'
 import './Messaging.css'
 import MeetingPanel from './MeetingPanel'
 import { ReportForm } from './Community'
+import { isConnected, subscribe } from './realtime'
+import { AdviceReviewForm } from './AdvisorReviews'
 
 export function ConnectionRequestForm({
   student,
@@ -179,8 +181,12 @@ export function RequestInbox({
             const incoming = item.recipient_id === user.id
             const peerId = incoming ? item.sender_id : item.recipient_id
             const peerName = incoming ? item.sender_name : item.recipient_name
+            const canReview = item.status === 'completed' && !incoming
             return (
-              <article className="request-card" key={item.id}>
+              <article
+                className={`request-card${canReview ? ' has-review' : ''}`}
+                key={item.id}
+              >
                 <div>
                   <div className="request-card-header">
                     <a href={`#/app/students/${peerId}`}>{peerName}</a>
@@ -254,6 +260,7 @@ export function RequestInbox({
                     <span className="profile-note">Chat is unavailable</span>
                   )}
                 </div>
+                {canReview && <AdviceReviewForm key={item.id} record={item} />}
               </article>
             )
           })}
@@ -277,39 +284,63 @@ export function Conversation({ requestId, user }) {
     const controller = new AbortController()
     let cursor = 0
     let timer
-    async function poll() {
+    let running = false
+    let again = false
+
+    async function load() {
+      if (running) {
+        again = true
+        return
+      }
+      running = true
+      clearTimeout(timer)
+      let failed = false
       try {
-        const data = await api(
-          `/api/requests/${requestId}/messages?after_id=${cursor}`,
-          { signal: controller.signal },
-        )
-        if (controller.signal.aborted) return
-        setRecord(data.request)
-        setError('')
-        if (data.messages.length) {
-          cursor = data.messages[data.messages.length - 1].id
-          setMessages((previous) =>
-            [
-              ...new Map(
-                [...previous, ...data.messages].map((m) => [m.id, m]),
-              ).values(),
-            ].sort((a, b) => a.id - b.id),
+        let more
+        do {
+          const data = await api(
+            `/api/requests/${requestId}/messages?after_id=${cursor}`,
+            { signal: controller.signal },
           )
-        }
-        setLoading(false)
-        timer = setTimeout(poll, data.has_more ? 0 : 3000)
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          setError(err.message)
+          if (controller.signal.aborted) return
+          setRecord(data.request)
+          setError('')
+          if (data.messages.length) {
+            cursor = data.messages[data.messages.length - 1].id
+            setMessages((previous) =>
+              [
+                ...new Map(
+                  [...previous, ...data.messages].map((m) => [m.id, m]),
+                ).values(),
+              ].sort((a, b) => a.id - b.id),
+            )
+          }
           setLoading(false)
-          timer = setTimeout(poll, 5000)
-        }
+          more = data.has_more
+        } while (more)
+      } catch (err) {
+        if (controller.signal.aborted) return
+        failed = true
+        setError(err.message)
+        setLoading(false)
+      }
+      running = false
+      if (again) {
+        again = false
+        load()
+      } else {
+        // Polling is the fallback for signals that never arrive.
+        timer = setTimeout(load, isConnected() ? 30000 : failed ? 5000 : 3000)
       }
     }
-    poll()
+
+    const unsubscribe = subscribe(load)
+    load()
+
     return () => {
       controller.abort()
       clearTimeout(timer)
+      unsubscribe()
     }
   }, [requestId])
   useEffect(() => {
@@ -386,6 +417,9 @@ export function Conversation({ requestId, user }) {
           <p className="conversation-context">
             <strong>Original request:</strong> {record.message}
           </p>
+          {record.status === 'completed' && record.sender_id === user.id && (
+            <AdviceReviewForm key={record.id} record={record} />
+          )}
           <div
             className="chat-log"
             role="log"

@@ -22,7 +22,7 @@
   
 
 
-PackConnect is a student-to-student peer-advice discovery portal being developed for NC State University. Students can search by course code to find peers who have completed a course and volunteered to share advice.
+PackConnect is a student-to-student peer-advice discovery portal being developed for NC State University. Students can search by course code or title to find peers who completed the course and volunteered to share advice.
 
 > **Project status:** Early working prototype. The application includes account registration and persistent student profiles. Login uses password verification and session cookies. All application data persists in Supabase PostgreSQL; acceptance unlocks private two-person chat. Course histories remain self-reported.
 
@@ -33,14 +33,15 @@ See the [Step 1 baseline audit](docs/STEP_1_AUDIT.md) for verified behavior, lim
 - Register an account with email, password, and a student profile. Passwords are hashed; emails remain private. Advising is optional.
 - Create and edit profiles with completed/current courses, skills, and advice topics. Only the signed-in owner can edit their profile; the API rejects unauthenticated or non-owner updates.
 - Set an open-request limit and pause new advice requests until a chosen date. Search and profiles show availability and capacity; the backend prevents concurrent overbooking. Complete accepted advice from Requests to free a slot and keep read-only message history. See [availability and migration instructions](docs/ADVISOR_AVAILABILITY.md).
-- Search by course code (for example, `CSC 510`) and filter by program, year, skills, advice topics, and advising availability.
-- Course search suggests up to ten matching codes from registered students' completed courses as you type. Select with the mouse or Arrow keys and Enter; Escape dismisses suggestions. Manual entry remains available, including when suggestions cannot load. Search treats `CSC510`, `csc 510`, and `CSC-510` alike. Suggestions reflect self-reported course histories, not an official university catalog; course titles are not yet stored. See [behavior and verification](docs/COURSE_AUTOCOMPLETE.md).
+- Search by course code (for example, `CSC 510`) or title (for example, `Software Engineering`). Filter by program, year, skills, advice topics, and advising availability.
+- Course search suggests up to ten courses from registered students' completed-course histories. Suggestions show the NC State catalog title when available. Select a suggestion with the mouse or keyboard to search its code, or submit the title to find peers across matching courses. Search treats `CSC510`, `csc 510`, and `CSC-510` alike. See [catalog source and search behavior](docs/COURSE_AUTOCOMPLETE.md).
 - Search lists registered students only, including confirmed Supabase Auth users linked through `students.auth_user_id` and accounts registered in this app. Profiles without a linked registered account are excluded from results. By default, results include students who opted in, are not paused, and have capacity; turning off the availability filter also includes registered students who are not currently advising.
 - Send persistent advice requests, view incoming/outgoing requests, and accept or decline as the recipient.
 - View a student's profile, including program, year, bio, interests, and completed courses (as returned by the API).
 - Store accounts, profiles, courses, requests, chat, and notifications in Supabase PostgreSQL.
 - Get in-app bell notifications for incoming requests, request decisions, and new chat messages. Read/unread state is saved per account.
 - Chat privately after acceptance. Both participants can send messages of up to 2,000 characters, and conversations persist across visits. Open chats refresh every three seconds.
+- Review an advisor after completing advice. Requesters can submit one 1–5 helpfulness rating and an optional comment per completed request, from Outgoing requests or message history. Advisor profiles show the average, review count, and latest course-specific feedback. Apply migrations before using reviews.
 
 New request and community tools include cancellation, seven-day expiration,
 a conversation inbox, block/report controls with moderator review, password
@@ -161,7 +162,7 @@ Open that URL in your browser. **The frontend is the actual website; port 5000 s
 
 ### 4. Try the application
 
-1. Search for `CSC 510`.
+1. Search for `CSC 510` or `Software Engineering`.
 2. Results depend on registered advisors in your Supabase project. Create an advisor account with `CSC 510` in its completed courses to try the search.
 3. Click **View Profile** to see a student's details.
 4. Try `CSC 540` or `CSC 515` for other matches.
@@ -173,8 +174,8 @@ Open that URL in your browser. **The frontend is the actual website; port 5000 s
 | --- | --- | --- |
 | GET | `/api/health` | Returns `{"status":"ok"}` |
 | POST | `/api/auth/register` | Creates an account and student profile; returns 201, 400 for invalid input, or 409 for a duplicate email |
-| GET | `/api/students/search?course=CSC%20510` | Finds opted-in students who completed the specified course |
-| GET | `/api/courses?q=CSC` | Suggests up to ten distinct completed-course codes matching a prefix; case, spaces, and hyphens are ignored |
+| GET | `/api/students/search?course=CSC%20510` | Finds opted-in students who completed a course matching the entered code or title |
+| GET | `/api/courses?q=software%20engineering` | Suggests up to ten distinct completed-course codes by code prefix or partial title; includes known titles |
 | GET | `/api/students/1` | Retrieves a student's full profile |
 | GET / POST | `/api/requests` | List your requests or create one for another registered advisor |
 | PATCH | `/api/requests/1` | Recipient accepts/declines a pending request |

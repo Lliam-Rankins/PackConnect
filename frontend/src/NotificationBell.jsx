@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, json } from './messagingApi'
 import './NotificationBell.css'
+import { isConnected, subscribe } from './realtime'
 
 function describe(item) {
   if (item.kind === 'request_received')
@@ -43,12 +44,20 @@ export default function NotificationBell({ route }) {
     let stopped = false
     let timer
     let controller
+    let running = false
+    let again = false
     async function refresh() {
       if (stopped) return
-      if (actionBusy.current) {
-        timer = setTimeout(refresh, 5000)
+      if (running) {
+        again = true
         return
       }
+      clearTimeout(timer)
+      if (actionBusy.current) {
+        timer = setTimeout(refresh, 1000)
+        return
+      }
+      running = true
       controller = new AbortController()
       pollRequest.current = controller
       const version = revision.current
@@ -72,17 +81,28 @@ export default function NotificationBell({ route }) {
         )
           setError(err.message)
       } finally {
+        running = false
         if (!stopped) {
           setLoading(false)
-          timer = setTimeout(refresh, 5000)
+          if (again) {
+            again = false
+            refresh()
+          } else {
+            // A fetch overtaken by a read action is retried soon.
+            const delay =
+              version !== revision.current ? 1000 : isConnected() ? 30000 : 5000
+            timer = setTimeout(refresh, delay)
+          }
         }
       }
     }
+    const unsubscribe = subscribe(refresh)
     refresh()
     return () => {
       stopped = true
       controller?.abort()
       clearTimeout(timer)
+      unsubscribe()
     }
   }, [route, open])
 

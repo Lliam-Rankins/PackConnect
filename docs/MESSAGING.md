@@ -42,8 +42,25 @@ Repeating the same decision is idempotent; changing a completed decision returns
 
 Chat history is ordered by message ID and retrieved incrementally. Both request
 participants can send messages; no third account can join. Original request text
-is displayed as conversation context. The frontend polls chats every three
-seconds and refreshes request lists on navigation and every eight seconds.
+is displayed as conversation context. Request lists refresh on navigation and
+every eight seconds.
+
+## Realtime updates
+
+Browsers never read the database. After a transaction commits, Flask sends an
+empty Supabase Broadcast signal to each affected student, and the browser
+refetches through the authenticated API. Each student has one channel whose name
+is an HMAC of their ID using `FLASK_SECRET_KEY`; `GET /api/realtime` returns it
+only to that signed-in student, with the publishable (or anon) key.
+
+Set `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_PUBLISHABLE_KEY` (or
+`SUPABASE_ANON_KEY`) and `FLASK_SECRET_KEY` in `backend/.env`, and keep public
+channel access enabled in the Supabase Realtime settings. While connected, chats
+and notifications also poll every 30 seconds to recover missed signals. Without
+a connection, chats poll every three seconds and notifications every five.
+
+Limitation: someone who learned a channel name could observe when activity occurs
+or send false signals, but could not read any data.
 
 ## Existing messages
 
@@ -72,10 +89,10 @@ third-user denial, and mobile layout.
 
 In-app bell notifications cover requests, decisions, and new messages. This
 implementation has no email/push notifications, read receipts, attachments,
-blocking, or message deletion. It uses polling, not WebSockets. Access is private
-at the application API level; this does not claim end-to-end encryption. Configure
-a persistent private `FLASK_SECRET_KEY` for sessions across backend restarts and
-HTTPS with `COOKIE_SECURE=true` for deployment, as described in README.
+or message deletion. Access is private at the application API level; this does not
+claim end-to-end encryption. Configure a persistent private `FLASK_SECRET_KEY` for
+sessions across backend restarts and HTTPS with `COOKIE_SECURE=true` for deployment,
+as described in README.
 
 ## Notification API
 
@@ -88,6 +105,6 @@ Authentication is required. Other users' notification IDs return 404. Notificati
 creation shares the request/decision/message transaction; repeated decisions do
 not generate duplicate alerts. Existing pending requests and completed decisions
 are backfilled using unique event keys, preserving read state on later startups.
-The frontend polls every five seconds, marks clicked alerts read, and supports
-outside-click/Escape dismissal. New-message alerts link to the accepted chat;
+The frontend refreshes on realtime signals (with polling as a fallback), marks
+clicked alerts read, and supports outside-click/Escape dismissal. New-message alerts link to the accepted chat;
 request-received alerts open Incoming and declined decisions open Outgoing.

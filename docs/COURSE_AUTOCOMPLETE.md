@@ -1,18 +1,27 @@
 # Course autocomplete
 
-The peer-search course field suggests codes from registered students' completed
-courses. It is not an official university catalog and does not supply course
-titles or verify completion. Current courses and profiles without a registered
-account are excluded. Confirmed, linked Supabase users are included before their
-first app login. Courses from advisors who paused advising can still appear;
-the search's availability filter determines which peers are returned.
+The peer-search course field accepts course codes and titles. Suggestions come
+from registered students' self-reported completed courses. Confirmed, linked
+Supabase users are included before their first app login. Courses from advisors
+who paused advising can still appear because the availability filter applies
+when finding peers.
 
-`GET /api/courses?q=CSC5` returns a `courses` array containing up to ten distinct,
-alphabetically sorted codes. Matching ignores case, whitespace, and hyphens and
-treats the prefix literally, including SQL wildcard characters. Missing/blank
-queries and normalized queries longer than 30 characters return an empty array.
-Student search uses the same normalization, including for existing course rows.
-No schema migration is required.
+`GET /api/courses?q=software%20engineering` returns a `courses` array with up to
+ten distinct codes and a `titles` object keyed by those codes. Suggestions match
+literal code prefixes and partial titles. Code matching ignores case, whitespace,
+and hyphens. Title matching ignores case and collapses repeated spaces. Code
+prefix matches appear first, with each group sorted by code.
+
+Choosing a suggestion places its code in the search field. If a student submits
+a title directly, `/api/students/search` finds peers who completed any matching
+course and returns the normalized `course_codes` used in the search. Advice
+requests use a matching completed course code when available.
+
+[`backend/course_titles.csv`](../backend/course_titles.csv) contains 6,209 code
+and title pairs from the 2026–27 [NC State course descriptions](https://catalog.ncsu.edu/course-descriptions/).
+Refresh the `code,title` CSV from that catalog when titles change. Codes absent
+from the snapshot remain searchable by code. The feature works with the existing
+database schema.
 
 The field waits 200 ms after typing before requesting suggestions and cancels
 outdated requests. Arrow keys highlight options; Enter selects the highlighted
@@ -40,10 +49,12 @@ Supabase email confirmation, and suggestions changing after profile edits.
 Use two fictional accounts: an advisor with several completed courses and a
 student looking for advice.
 
-1. Sign in as the student, enter a partial course code, and confirm suggestions.
+1. Sign in as the student, enter a partial title such as `software engine`, and
+   confirm that suggestions show each matching code and its title.
 2. Use ArrowUp to highlight the final suggestion; confirm it scrolls into view.
 3. Press Enter to select it, then Enter again to search and find the advisor.
-4. Search a manual code such as `csc-510`; confirm it finds `CSC 510` peers.
+4. Submit `software engineering` directly and confirm that peers from multiple
+   matching courses can appear. Search `csc-510` to verify code normalization.
 5. Repeat at a narrow mobile viewport; tap a suggestion and check that the page
    has no horizontal overflow.
 6. Check that Escape and clicking elsewhere close the dropdown, and that typing

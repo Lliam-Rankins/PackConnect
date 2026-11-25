@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ConnectionRequestForm, RequestInbox, Conversation } from './Messaging'
+import { subscribe } from './realtime'
 import { deferred, request, response, student } from './test/fixtures'
 
 vi.mock('./MeetingPanel', () => ({ default: () => null }))
@@ -344,5 +345,33 @@ describe('accepted-request conversation', () => {
     expect(
       screen.queryByRole('button', { name: 'Send message' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('loads every page, then fetches after the last message on a signal', async () => {
+    let signal
+    vi.mocked(subscribe).mockImplementation((listener) => {
+      signal = listener
+      return () => {}
+    })
+    const page = (id, body, has_more = false) =>
+      response({
+        request: { ...request, status: 'accepted' },
+        messages: [{ id, sender_id: 2, body, created_at: request.created_at }],
+        has_more,
+      })
+    fetch
+      .mockResolvedValueOnce(page(100, 'Older message', true))
+      .mockResolvedValueOnce(page(101, 'Newer message'))
+      .mockResolvedValueOnce(page(102, 'Signaled message'))
+    render(<Conversation requestId={7} user={student} />)
+    expect(await screen.findByText('Newer message')).toBeInTheDocument()
+    expect(screen.getByText('Older message')).toBeInTheDocument()
+
+    await act(() => signal())
+
+    expect(await screen.findByText('Signaled message')).toBeInTheDocument()
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(
+      [0, 100, 101].map((id) => `/api/requests/7/messages?after_id=${id}`),
+    )
   })
 })

@@ -8,6 +8,7 @@ from flask import Blueprint, g, jsonify, request, session
 from identity import registered_student_sql, session_student_id
 from availability import advisor_availability
 from lifecycle import blocked, expire_requests, lock_students, notify
+from live_updates import signal
 
 
 def initialize_messaging(db):
@@ -48,10 +49,12 @@ def create_messaging_blueprint(get_db):
 
     def get_request(db, request_id, lock=False):
         row = db.execute("""
-            SELECT r.*, s.name AS sender_name, t.name AS recipient_name
+            SELECT r.*, s.name AS sender_name, t.name AS recipient_name,
+                   v.rating AS review_rating, v.comment AS review_comment
             FROM advice_requests r
             JOIN students s ON s.id = r.sender_id
             JOIN students t ON t.id = r.recipient_id
+            LEFT JOIN advice_reviews v ON v.request_id = r.id
             WHERE r.id = %s AND (r.sender_id = %s OR r.recipient_id = %s)
         """ + (" FOR UPDATE OF r" if lock else ""),
                          (request_id, session["student_id"], session["student_id"])).fetchone()
@@ -63,10 +66,12 @@ def create_messaging_blueprint(get_db):
         with request_database() as db:
             expire_requests(db, student_id=session["student_id"])
             rows = db.execute("""
-                SELECT r.*, s.name AS sender_name, t.name AS recipient_name
+                SELECT r.*, s.name AS sender_name, t.name AS recipient_name,
+                       v.rating AS review_rating, v.comment AS review_comment
                 FROM advice_requests r
                 JOIN students s ON s.id = r.sender_id
                 JOIN students t ON t.id = r.recipient_id
+                LEFT JOIN advice_reviews v ON v.request_id = r.id
                 WHERE r.sender_id = %s OR r.recipient_id = %s
                 ORDER BY r.id DESC
             """, (session["student_id"], session["student_id"])).fetchall()
@@ -117,10 +122,8 @@ def create_messaging_blueprint(get_db):
                 """, (session["student_id"], recipient_id, fields["course_code"],
                       fields["advice_topic"], fields["message"]))
                 result = get_request(db, cursor.fetchone()["id"])
-                db.execute("""
-                    INSERT INTO notifications (user_id, actor_id, request_id, kind, event_key)
-                    VALUES (%s, %s, %s, 'request_received', %s)
-                """, (recipient_id, session["student_id"], result["id"], f"request:{result['id']}"))
+                notify(db, recipient_id, session["student_id"], result["id"],
+                       "request_received", f"request:{result['id']}")
         except UniqueViolation:
             return jsonify({"error": "You already have a pending request or accepted connection with this student. Open Requests to continue."}), 409
         return jsonify({"request": result}), 201
@@ -151,6 +154,7 @@ def create_messaging_blueprint(get_db):
                 if record["status"] not in ("accepted", "completed"):
                     return jsonify({"error": "Only accepted advice can be completed."}), 409
                 db.execute("UPDATE advice_requests SET status = 'completed' WHERE id = %s", (request_id,))
+                signal(db, record["sender_id"], record["recipient_id"])
                 db.execute("UPDATE advice_meetings SET status='cancelled' WHERE request_id=%s AND status IN ('proposed','accepted') AND ends_at>now()",(request_id,))
                 return jsonify({"request": get_request(db, request_id)})
             if record["recipient_id"] != session["student_id"]:
@@ -161,12 +165,41 @@ def create_messaging_blueprint(get_db):
             if result["status"] != data["status"]:
                 return jsonify({"error": "This request has already been handled."}), 409
             if changed:
-                db.execute("""
-                    INSERT INTO notifications (user_id, actor_id, request_id, kind, event_key)
-                    VALUES (%s, %s, %s, %s, %s) ON CONFLICT (event_key) DO NOTHING
-                """, (record["sender_id"], session["student_id"], request_id,
-                      data["status"], f"decision:{request_id}"))
+                notify(db, record["sender_id"], session["student_id"], request_id,
+                       data["status"], f"decision:{request_id}")
         return jsonify({"request": result})
+
+    @api.route("/api/requests/<int:request_id>/review", methods=["POST"])
+    @authenticated
+    def review_advisor(request_id):
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="Send a JSON object with your rating and optional comment."), 400
+        rating = data.get("rating")
+        comment = data.get("comment", "")
+        if type(rating) is not int or not 1 <= rating <= 5:
+            return jsonify(error="Choose a whole-number rating from 1 to 5."), 400
+        if not isinstance(comment, str) or len(comment.strip()) > 1000:
+            return jsonify(error="Feedback must contain at most 1,000 characters."), 400
+
+        with request_database() as db:
+            # Serialize submissions for this request, including retries from other tabs.
+            record = get_request(db, request_id, lock=True)
+            if record is None:
+                return jsonify(error="Request not found."), 404
+            if record["sender_id"] != session["student_id"]:
+                return jsonify(error="Only the student who requested advice can review the advisor."), 403
+            if record["status"] != "completed":
+                return jsonify(error="Complete this advice before submitting a review."), 409
+            review = db.execute("""
+                INSERT INTO advice_reviews (request_id, rating, comment)
+                VALUES (%s, %s, %s) ON CONFLICT (request_id) DO NOTHING
+                RETURNING request_id, rating, comment, created_at
+            """, (request_id, rating, comment.strip())).fetchone()
+            if review is None:
+                return jsonify(error="You already reviewed this advice request."), 409
+            result = {**dict(review), "course_code": record["course_code"]}
+        return jsonify(review=result), 201
 
     @api.route("/api/requests/<int:request_id>/messages", methods=["GET", "POST"])
     @authenticated
@@ -193,10 +226,10 @@ def create_messaging_blueprint(get_db):
                                     (request_id, session["student_id"], body.strip()))
                 row = db.execute("SELECT * FROM chat_messages WHERE id = %s", (cursor.fetchone()["id"],)).fetchone()
                 peer_id = record["recipient_id"] if record["sender_id"] == session["student_id"] else record["sender_id"]
-                db.execute("""
-                    INSERT INTO notifications (user_id, actor_id, request_id, kind, event_key)
-                    VALUES (%s, %s, %s, 'message', %s)
-                """, (peer_id, session["student_id"], request_id, f"message:{row['id']}"))
+                notify(db, peer_id, session["student_id"], request_id,
+                       "message", f"message:{row['id']}")
+                # The sender's other tabs need the new message too.
+                signal(db, session["student_id"])
                 return jsonify({"message": dict(row)}), 201
             after_id = request.args.get("after_id", "0")
             if not after_id.isascii() or not after_id.isdigit() or len(after_id) > 18:

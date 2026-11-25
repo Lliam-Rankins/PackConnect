@@ -13,8 +13,10 @@ from identity import registered_student_sql, session_student_id
 from community import create_community_blueprint
 from meetings import create_meetings_blueprint
 from recovery import create_recovery_blueprint
+from live_updates import create_realtime_blueprint
 from lifecycle import lock_students
 from availability import availability_payload, workload_join, availability_columns, availability_status_sql
+from course_catalog import COURSE_TITLES, course_key, course_label, matching_title_codes
 
 import os
 import secrets
@@ -72,6 +74,7 @@ app.register_blueprint(create_messaging_blueprint(get_db))
 app.register_blueprint(create_community_blueprint(get_db))
 app.register_blueprint(create_meetings_blueprint(get_db))
 app.register_blueprint(create_recovery_blueprint(get_db))
+app.register_blueprint(create_realtime_blueprint(get_db))
 
 
 def normalize_courses(courses):
@@ -158,6 +161,24 @@ def fetch_student(db, student_id):
         row["course_code"] for row in current_courses
     ]
     profile["willing_to_advise"] = bool(profile["willing_to_advise"])
+
+    summary = db.execute("""
+        SELECT COUNT(*) AS review_count, AVG(v.rating) AS average_rating
+        FROM advice_reviews v JOIN advice_requests r ON r.id = v.request_id
+        WHERE r.recipient_id = %s
+    """, (student_id,)).fetchone()
+    average_rating = summary["average_rating"]
+    profile["review_summary"] = {
+        "review_count": summary["review_count"],
+        "average_rating": float(average_rating) if average_rating is not None else None,
+    }
+    reviews = db.execute("""
+        SELECT v.request_id, v.rating, v.comment, v.created_at, r.course_code
+        FROM advice_reviews v JOIN advice_requests r ON r.id = v.request_id
+        WHERE r.recipient_id = %s
+        ORDER BY v.created_at DESC, v.request_id DESC LIMIT 20
+    """, (student_id,)).fetchall()
+    profile["reviews"] = [dict(row) for row in reviews]
 
     return profile
 
@@ -339,31 +360,39 @@ def create_student():
     return jsonify({"error": "Create your profile through account registration."}), 410
 
 
-def course_key(value):
-    """Ignore spacing and hyphens consistently for discovery and matching."""
-    return re.sub(r"[\s-]+", "", value).upper()
+COMPLETED_COURSE_KEY = "regexp_replace(UPPER(c.course_code), '[[:space:]-]+', '', 'g')"
 
 
 @app.route("/api/courses")
 def suggest_courses():
-    query = course_key(request.args.get("q", ""))
-    if not query or len(query) > 30:
-        return jsonify({"courses": []})
+    query = request.args.get("q", "")
+    code_prefix = course_key(query)
+    if not 1 <= len(code_prefix) <= 30:
+        code_prefix = None
+    title_codes = matching_title_codes(query)
+    if not code_prefix and not title_codes:
+        return jsonify(courses=[], titles={})
     with get_db() as db:
         rows = db.execute(f"""
-            SELECT DISTINCT regexp_replace(UPPER(c.course_code), '[[:space:]-]+', '', 'g') AS code
-            FROM completed_courses c
-            JOIN students s ON s.id = c.student_id
-            WHERE {registered_student_sql()}
-              AND starts_with(regexp_replace(UPPER(c.course_code), '[[:space:]-]+', '', 'g'), %s)
-            ORDER BY code LIMIT 10
-        """, (query,)).fetchall()
-    return jsonify({"courses": [re.sub(r"^([A-Z]+)(\d)", r"\1 \2", row["code"]) for row in rows]})
+            SELECT code FROM (
+                SELECT DISTINCT {COMPLETED_COURSE_KEY} AS code
+                FROM completed_courses c
+                JOIN students s ON s.id = c.student_id
+                WHERE {registered_student_sql()}
+            ) AS registered_courses
+            WHERE starts_with(code, %s) OR code = ANY(%s::text[])
+            ORDER BY starts_with(code, %s) DESC, code LIMIT 10
+        """, (code_prefix, title_codes, code_prefix)).fetchall()
+    codes = [row["code"] for row in rows]
+    return jsonify(
+        courses=[course_label(code) for code in codes],
+        titles={course_label(code): COURSE_TITLES[code] for code in codes if code in COURSE_TITLES},
+    )
 
 
 @app.route("/api/students/search")
 def search_students():
-    course = request.args.get("course", "").strip().upper()
+    course = request.args.get("course", "").strip()
     program = request.args.get("program", "").strip()
     year = request.args.get("year", "").strip()
     skills = request.args.get("skills", "").strip()
@@ -371,7 +400,7 @@ def search_students():
     available = request.args.get("available", "true").strip().lower()
 
     if not any((course, program, year, skills, advice_topics)):
-        return jsonify({"students": []})
+        return jsonify(students=[], course_codes=[])
 
     # Include both local accounts and confirmed Supabase registrations.
     conditions = [registered_student_sql()]
@@ -381,16 +410,21 @@ def search_students():
         conditions.append("NOT EXISTS (SELECT 1 FROM student_blocks b WHERE (b.blocker_id=%s AND b.blocked_id=s.id) OR (b.blocker_id=s.id AND b.blocked_id=%s))")
         parameters.extend([viewer,viewer])
 
+    course_codes = []
     if course:
-        conditions.append("""
+        code = course_key(course)
+        course_codes = [code]
+        if code not in COURSE_TITLES:
+            course_codes.extend(matching_title_codes(course))
+        conditions.append(f"""
             EXISTS (
                 SELECT 1
                 FROM completed_courses c
                 WHERE c.student_id = s.id
-                  AND regexp_replace(UPPER(c.course_code), '[[:space:]-]+', '', 'g') = %s
+                  AND {COMPLETED_COURSE_KEY} = ANY(%s::text[])
             )
         """)
-        parameters.append(course_key(course))
+        parameters.append(course_codes)
 
     if available != "false":
         conditions.append(f"({availability_status_sql()}) = 'available'")
@@ -422,9 +456,7 @@ def search_students():
             ORDER BY s.name
         """, parameters).fetchall()
 
-    return jsonify({
-        "students": [dict(row) for row in rows]
-    })
+    return jsonify(students=[dict(row) for row in rows], course_codes=course_codes)
 
 
 @app.route("/api/students/<int:student_id>")

@@ -104,3 +104,44 @@ This demonstrates new behavior since the inherited private-advice flow. It is
 not evidence of a measured improvement in real student outcomes. A business M0
 claim needs a separately designed retrieval/usability evaluation and reported
 results; passing workflow tests alone does not establish that claim.
+
+## Automated browser regression
+
+The dedicated `Q&A browser regression` workflow runs Chromium, Vite, the real
+Flask API and PostgreSQL. It does not intercept or mock API requests. Two separate
+browser contexts log in as fictional accounts, ask/answer, verify author-only
+helpful selection, reload for persistence, then find advice by answer text with
+course/status filters. It runs at 390px and 1280px and checks horizontal overflow.
+An anonymous HTTP request must still be denied. A third test sends 12 concurrent
+reads and checks response correctness and unchanged data, recording elapsed time.
+This small correctness check is not a production load/capacity benchmark.
+
+To run locally, install the existing backend requirements into a virtual env,
+then from `frontend/`:
+
+```sh
+npm ci
+npx playwright install chromium
+TEST_DATABASE_URL='postgresql://USER@127.0.0.1/packconnect_test?sslmode=disable' \
+  E2E_PYTHON=../.venv/bin/python npm run test:e2e
+```
+
+The runner refuses a remote host or a database name that does not end in `_test`.
+It uses the existing test fixture to apply migrations in a temporary random
+schema and cleans it up after a normal shutdown. It also creates the minimal
+Supabase Auth table/roles needed by the existing local fixture. Never point it
+at a database with real accounts. The servers bind only to localhost on ports
+5052/5174 and refuse to reuse existing servers. Hosted credential environment
+variables are blanked in the test process. No local `.env` file is rewritten.
+CI stores the HTML report and failure traces/screenshots as artifacts.
+
+The isolated unit checks can run without any database:
+
+```sh
+python -m unittest discover -s backend -p 'test_course_qa_unit.py' -v
+```
+
+They cover course normalization, invalid types/formats, exact text boundaries,
+whitespace, Unicode and preserving plain text. Existing real-database tests
+remain distinct. Hosted Supabase checks still require the team's approved
+configuration; browser tests do not establish live deployment readiness.

@@ -21,3 +21,7 @@ dist/
 .idea/
 # Vite cache
 .vite/
+
+# Browser test artifacts
+frontend/playwright-report/
+frontend/test-results/

@@ -41,6 +41,7 @@ See the [Step 1 baseline audit](docs/STEP_1_AUDIT.md) for verified behavior, lim
 - Store accounts, profiles, courses, requests, chat, and notifications in Supabase PostgreSQL.
 - Get in-app bell notifications for incoming requests, request decisions, and new chat messages. Read/unread state is saved per account.
 - Chat privately after acceptance. Both participants can send messages of up to 2,000 characters, and conversations persist across visits. Open chats refresh every three seconds.
+- Review an advisor after completing advice. Requesters can submit one 1–5 helpfulness rating and an optional comment per completed request, from Outgoing requests or message history. Advisor profiles show the average, review count, and latest course-specific feedback. Apply migrations before using reviews.
 
 New request and community tools include cancellation, seven-day expiration,
 a conversation inbox, block/report controls with moderator review, password

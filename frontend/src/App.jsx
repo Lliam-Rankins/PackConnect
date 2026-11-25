@@ -11,6 +11,7 @@ import {
 } from './Community'
 import CourseAutocomplete from './CourseAutocomplete'
 import { availabilityLabel, capacityLabel } from './advisorAvailability'
+import { AdvisorReviews } from './AdvisorReviews'
 
 const API_URL = ''
 
@@ -976,6 +977,7 @@ function App({ user, onLogout, route, onUserUpdated }) {
                 <p className="profile-note">{capacityLabel(selectedStudent)}</p>
               </div>
             </div>
+            <AdvisorReviews student={selectedStudent} />
             {selectedStudent.id !== user.id && (
               <SafetyControls
                 key={selectedStudent.id}

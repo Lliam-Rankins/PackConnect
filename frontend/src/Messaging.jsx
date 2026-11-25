@@ -3,6 +3,7 @@ import { api, json } from './messagingApi'
 import './Messaging.css'
 import MeetingPanel from './MeetingPanel'
 import { ReportForm } from './Community'
+import { AdviceReviewForm } from './AdvisorReviews'
 
 export function ConnectionRequestForm({
   student,
@@ -179,8 +180,12 @@ export function RequestInbox({
             const incoming = item.recipient_id === user.id
             const peerId = incoming ? item.sender_id : item.recipient_id
             const peerName = incoming ? item.sender_name : item.recipient_name
+            const canReview = item.status === 'completed' && !incoming
             return (
-              <article className="request-card" key={item.id}>
+              <article
+                className={`request-card${canReview ? ' has-review' : ''}`}
+                key={item.id}
+              >
                 <div>
                   <div className="request-card-header">
                     <a href={`#/app/students/${peerId}`}>{peerName}</a>
@@ -254,6 +259,7 @@ export function RequestInbox({
                     <span className="profile-note">Chat is unavailable</span>
                   )}
                 </div>
+                {canReview && <AdviceReviewForm key={item.id} record={item} />}
               </article>
             )
           })}
@@ -386,6 +392,9 @@ export function Conversation({ requestId, user }) {
           <p className="conversation-context">
             <strong>Original request:</strong> {record.message}
           </p>
+          {record.status === 'completed' && record.sender_id === user.id && (
+            <AdviceReviewForm key={record.id} record={record} />
+          )}
           <div
             className="chat-log"
             role="log"

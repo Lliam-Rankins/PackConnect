@@ -20,6 +20,11 @@ No live Supabase credentials or GitHub repository secrets are required. The
 schema fixtures supply the minimal Supabase roles and Auth reference table.
 Live integration tests are skipped unless explicitly enabled.
 
+Every successful backend test run publishes `coverage.xml` as the
+`backend-coverage` artifact in GitHub Actions. To also publish to Codecov,
+connect this repository in Codecov and set the GitHub Actions repository
+variable `CODECOV_ENABLED` to `true`. The upload uses GitHub's OIDC identity.
+
 See [profile and advanced-search test evidence](PROFILE_SEARCH_TESTS.md) for
 the regression scenarios added for issue #9 and their recorded local results.
 

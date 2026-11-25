@@ -159,6 +159,24 @@ def fetch_student(db, student_id):
     ]
     profile["willing_to_advise"] = bool(profile["willing_to_advise"])
 
+    summary = db.execute("""
+        SELECT COUNT(*) AS review_count, AVG(v.rating) AS average_rating
+        FROM advice_reviews v JOIN advice_requests r ON r.id = v.request_id
+        WHERE r.recipient_id = %s
+    """, (student_id,)).fetchone()
+    average_rating = summary["average_rating"]
+    profile["review_summary"] = {
+        "review_count": summary["review_count"],
+        "average_rating": float(average_rating) if average_rating is not None else None,
+    }
+    reviews = db.execute("""
+        SELECT v.request_id, v.rating, v.comment, v.created_at, r.course_code
+        FROM advice_reviews v JOIN advice_requests r ON r.id = v.request_id
+        WHERE r.recipient_id = %s
+        ORDER BY v.created_at DESC, v.request_id DESC LIMIT 20
+    """, (student_id,)).fetchall()
+    profile["reviews"] = [dict(row) for row in reviews]
+
     return profile
 
 

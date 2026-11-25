@@ -1,68 +1,216 @@
 .course-qa {
+  width: 100%;
   max-width: 960px;
-  margin: 1.5rem auto;
-  padding: 0 1rem;
+  min-width: 0;
+  margin: 0 auto;
+  color: #1f2937;
 }
+
+.course-qa h1 {
+  margin: 0 0 14px;
+  font-size: clamp(28px, 4vw, 38px);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.course-qa > p:not([role]) {
+  max-width: 680px;
+  margin: 0 0 28px;
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.course-qa h2,
+.course-qa h3 {
+  margin: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.course-qa h2 {
+  font-size: 22px;
+}
+.course-qa h3 {
+  font-size: 17px;
+}
+.course-qa > h2 {
+  margin-top: 28px;
+}
+
 .course-qa label {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 0.4rem;
-  font-weight: 600;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
 }
+
 .course-qa input,
 .course-qa textarea,
 .course-qa select {
-  font: inherit;
-  padding: 0.65rem;
-  border: 1px solid #a8adb5;
-  border-radius: 0.35rem;
+  width: 100%;
   min-width: 0;
-}
-.course-qa button {
+  min-height: 46px;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2937;
   font: inherit;
-  padding: 0.6rem 0.9rem;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.course-qa input::placeholder {
+  color: #6b7280;
+}
+.course-qa textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.course-qa button {
+  justify-self: start;
+  min-height: 46px;
+  max-width: 100%;
+  padding: 12px 20px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #cc0000;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
   cursor: pointer;
 }
-.course-qa button:disabled {
-  cursor: wait;
-  opacity: 0.6;
+
+.course-qa button:hover:not(:disabled) {
+  background: #a50000;
 }
+.course-qa button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .qa-filters,
 .qa-post {
   display: grid;
-  gap: 1rem;
-  padding: 1.2rem;
-  border: 1px solid #d9dde3;
-  border-radius: 0.5rem;
-  margin: 1rem 0;
-  background: white;
+  min-width: 0;
+  gap: 18px;
+  margin: 20px 0;
+  padding: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 20px rgb(0 0 0 / 3%);
 }
+
+.qa-filters {
+  align-items: end;
+}
+.qa-filters button {
+  width: 100%;
+}
+.qa-post p {
+  margin: 0;
+  line-height: 1.7;
+}
+.qa-post > p:not(.qa-body, .qa-helpful) {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.course-qa article button {
+  border-color: #e9b6b6;
+  background: #fff;
+  color: #a50000;
+}
+.course-qa article button:hover:not(:disabled) {
+  background: #fff1f1;
+}
+
 .qa-list {
-  list-style: none;
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
   padding: 0;
+  list-style: none;
 }
 .qa-list li {
-  padding: 1rem 0;
-  border-bottom: 1px solid #d9dde3;
+  min-width: 0;
+  padding: 20px 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+.qa-list p {
+  margin: 10px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.course-qa a {
+  color: #a50000;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.course-qa a:hover {
+  color: #780000;
 }
 .qa-list a {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-decoration: none;
+}
+.qa-list a:hover {
+  text-decoration: underline;
 }
 .qa-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .qa-helpful {
-  font-weight: 700;
+  padding: 10px 14px;
+  border-left: 3px solid #287747;
+  border-radius: 4px;
+  background: #edf7ef;
   color: #216638;
+  font-size: 14px;
+  font-weight: 700;
+}
+.course-qa > [role='status'] {
+  color: #374151;
+  line-height: 1.6;
 }
 .course-qa :focus-visible {
-  outline: 3px solid #315cd6;
+  outline: 2px solid #cc0000;
   outline-offset: 3px;
 }
-@media (min-width: 700px) {
+
+@media (min-width: 640px) {
   .qa-filters {
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+}
+@media (min-width: 1000px) {
+  .qa-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr) minmax(0, 1.5fr) auto;
+  }
+}
+@media (max-width: 480px) {
+  .qa-filters,
+  .qa-post {
+    padding: 18px;
+    border-radius: 12px;
+  }
+  .qa-list li {
+    padding: 18px;
+  }
+  .course-qa button {
+    width: 100%;
   }
 }

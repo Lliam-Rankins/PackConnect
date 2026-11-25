@@ -15,6 +15,7 @@ export default function CourseAutocomplete({ value, onChange }) {
   const query = value.trim()
   const current = result.query === query
   const courses = current ? result.courses : []
+  const titles = current ? result.titles : null
   const open = focused && !dismissed && Boolean(query)
 
   useEffect(() => {
@@ -43,7 +44,12 @@ export default function CourseAutocomplete({ value, onChange }) {
           throw new Error('Invalid course suggestions')
         }
         if (!controller.signal.aborted) {
-          setResult({ query, courses: data.courses, failed: false })
+          setResult({
+            query,
+            courses: data.courses,
+            titles: data.titles,
+            failed: false,
+          })
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -68,7 +74,7 @@ export default function CourseAutocomplete({ value, onChange }) {
       <input
         type="text"
         role="combobox"
-        aria-label="Course code"
+        aria-label="Course code or title"
         aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={open ? `${id}-list` : undefined}
@@ -77,9 +83,9 @@ export default function CourseAutocomplete({ value, onChange }) {
         }
         aria-describedby={`${id}-hint`}
         autoComplete="off"
-        maxLength={30}
+        maxLength={150}
         value={value}
-        placeholder="Enter a course code, e.g. CSC 510"
+        placeholder="Enter a course code or title"
         onChange={(event) => {
           onChange(event.target.value)
           setActive(-1)
@@ -118,8 +124,7 @@ export default function CourseAutocomplete({ value, onChange }) {
         }}
       />
       <span className="course-hint" id={`${id}-hint`}>
-        Suggestions come from peers’ completed courses. You can also enter a
-        code.
+        Suggestions come from peers’ completed courses.
       </span>
       {open && (
         <div className="course-suggestions">
@@ -139,6 +144,7 @@ export default function CourseAutocomplete({ value, onChange }) {
                 onClick={() => select(code)}
               >
                 {code}
+                {typeof titles?.[code] === 'string' && ` — ${titles[code]}`}
               </li>
             ))}
           </ul>
@@ -147,8 +153,8 @@ export default function CourseAutocomplete({ value, onChange }) {
               {!current
                 ? 'Looking up courses…'
                 : result.failed
-                  ? 'Suggestions unavailable. You can still search by course code.'
-                  : 'No matching courses yet. You can still search by course code.'}
+                  ? 'Suggestions unavailable. You can still search by course code or title.'
+                  : 'No matching courses yet. You can still search by course code or title.'}
             </p>
           )}
         </div>

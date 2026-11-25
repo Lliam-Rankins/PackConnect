@@ -11,6 +11,7 @@ import {
 } from './Community'
 import CourseAutocomplete from './CourseAutocomplete'
 import { availabilityLabel, capacityLabel } from './advisorAvailability'
+import { AdvisorReviews } from './AdvisorReviews'
 
 const API_URL = ''
 
@@ -48,6 +49,10 @@ function textToCourses(value) {
     .filter(Boolean)
 }
 
+function courseKey(value) {
+  return value.replace(/[\s-]+/g, '').toUpperCase()
+}
+
 function App({ user, onLogout, route, onUserUpdated }) {
   const isSearchPage = route === 'app'
   const profileId = /^app\/students\/[1-9]\d*$/.test(route)
@@ -58,6 +63,7 @@ function App({ user, onLogout, route, onUserUpdated }) {
   const isEditing = route === 'app/profile/edit'
   const [menuOpen, setMenuOpen] = useState(false)
   const [course, setCourse] = useState('CSC 510')
+  const [matchedCourseKeys, setMatchedCourseKeys] = useState(['CSC510'])
   const [filters, setFilters] = useState(emptyFilters)
   const [students, setStudents] = useState([])
   const [selectedStudent, setSelectedStudent] = useState(null)
@@ -112,8 +118,9 @@ function App({ user, onLogout, route, onUserUpdated }) {
     searchFilters = filters,
   ) {
     if (!hasSearchCriteria(searchCourse, searchFilters)) {
-      setError('Please enter a course code or at least one filter.')
+      setError('Enter a course code, title, or at least one filter.')
       setStudents([])
+      setMatchedCourseKeys([])
       return
     }
 
@@ -131,6 +138,10 @@ function App({ user, onLogout, route, onUserUpdated }) {
 
       const data = await response.json()
       setStudents(Array.isArray(data) ? data : (data.students ?? []))
+      setMatchedCourseKeys(
+        data.course_codes ??
+          (searchCourse.trim() ? [courseKey(searchCourse)] : []),
+      )
     } catch {
       setError(
         'Could not connect to the Flask backend. Make sure it is running on port 5000.',
@@ -162,11 +173,11 @@ function App({ user, onLogout, route, onUserUpdated }) {
   }
 
   function profileMatchesSearch(student, completedCourses) {
-    const courseKey = (value) => value.replace(/[\s-]+/g, '').toUpperCase()
-    const normalizedCourse = courseKey(course)
     const hasCourseMatch =
-      !normalizedCourse ||
-      completedCourses.map(courseKey).includes(normalizedCourse)
+      !matchedCourseKeys.length ||
+      completedCourses.some((code) =>
+        matchedCourseKeys.includes(courseKey(code)),
+      )
 
     const containsFilter = (value, filterValue) =>
       !filterValue.trim() ||
@@ -447,8 +458,8 @@ function App({ user, onLogout, route, onUserUpdated }) {
             <span className="eyebrow">STUDENT-TO-STUDENT SUPPORT</span>
             <h2>Find someone who's taken your course.</h2>
             <p>
-              Search by course code to discover students who have completed the
-              course and volunteered to share their experience.
+              Search by course code or title to find students who completed it
+              and volunteered to share their experience.
             </p>
 
             <form
@@ -797,7 +808,7 @@ function App({ user, onLogout, route, onUserUpdated }) {
               <p className="empty-state">Searching for students...</p>
             ) : students.length === 0 ? (
               <p className="empty-state">
-                No students found. Try another course code.
+                No students found. Try another course code or title.
               </p>
             ) : (
               <div className="student-grid">
@@ -976,6 +987,7 @@ function App({ user, onLogout, route, onUserUpdated }) {
                 <p className="profile-note">{capacityLabel(selectedStudent)}</p>
               </div>
             </div>
+            <AdvisorReviews student={selectedStudent} />
             {selectedStudent.id !== user.id && (
               <SafetyControls
                 key={selectedStudent.id}
@@ -1045,7 +1057,11 @@ function App({ user, onLogout, route, onUserUpdated }) {
                   <ConnectionRequestForm
                     key={selectedStudent.id}
                     student={selectedStudent}
-                    defaultCourse={course}
+                    defaultCourse={
+                      selectedStudent.completed_courses?.find((code) =>
+                        matchedCourseKeys.includes(courseKey(code)),
+                      ) ?? ''
+                    }
                     onRequestCreated={refreshRequests}
                   />
                 )

@@ -119,6 +119,39 @@ Accepted meetings provide a participant-only iCalendar download for import into
 calendar apps. It includes UTC times and escaped/folded text fields. It does not
 write to Google Calendar or send calendar invitations automatically.
 
+## Advisor ratings and feedback
+
+Apply `20261120000100_advisor_reviews.sql` with `python backend/migrate.py`.
+It adds review storage and preserves existing requests, accounts, and messages.
+Existing completed requests are eligible for reviews.
+
+After completing advice, the requester can submit a 1–5 helpfulness rating and
+an optional comment of up to 1,000 characters from Outgoing requests or completed
+message history. Submission is final. The advisor and unrelated students cannot
+review that request. The request's stored course and advisor determine the review
+association. The API ignores client-supplied identity and course overrides.
+
+`POST /api/requests/<id>/review` accepts `rating` and optional `comment`.
+It returns 201 on creation, 400 for invalid input, 401 without a valid session,
+403 for the advisor, 404 for inaccessible or missing requests, and 409 for an
+unfinished request or duplicate review. A request-row lock and database primary
+key protect concurrent submissions. Request and conversation responses include
+`review_rating` and `review_comment` so saved reviews survive reloads.
+
+Profile responses include `review_summary` with `average_rating` (null when
+unrated) and `review_count`, plus `reviews` containing the latest 20 reviews.
+The average and count include all reviews. Feedback displays the course, score,
+comment, and date. Public feedback omits the reviewer's name, email, and original
+request text. Database browser-role access is revoked, following existing storage
+authorization.
+
+To demonstrate, use two accounts to request, accept, and complete advice. Submit
+a review from the requester's Outgoing tab, then open the advisor profile. Reload
+both pages to confirm persistence. Repeat the POST to demonstrate duplicate
+rejection, and attempt it as the advisor and an unrelated third account to
+demonstrate authorization. `backend/test_reviews.py` automates these scenarios,
+including concurrent submission and migration compatibility.
+
 ## Verification
 
 Run the frontend tests, lint, build, and formatting check as described in README.

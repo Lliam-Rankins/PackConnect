@@ -185,3 +185,93 @@ class CourseQATests(PostgresTestCase):
         with portal.get_db() as db:
             db.execute('INSERT INTO student_blocks(blocker_id,blocked_id) VALUES(%s,%s)',(self.ids[0],self.ids[1]))
         self.assertEqual(self.author.put(url,json={'answer_id':first}).status_code,404)
+
+    def test_filters_combine_and_search_text_cannot_change_sql(self):
+        from urllib.parse import urlencode
+        wanted = self.ask(title="Preparing O'Reilly readings", body='Use the rubric_100% checklist')
+        aid = self.answer(wanted, body='Start the project early')
+        self.author.put(f'/api/qa/questions/{wanted}/helpful-answer', json={'answer_id': aid})
+        self.ask(course_code='CSC 540', title='Preparing readings', body='Start the project early')
+        self.ask(title='Preparing another course task', body='No chosen answer')
+        query = urlencode({'course': 'csc-510', 'q': 'project early', 'status': 'answered'})
+        rows = self.other.get('/api/qa/questions?' + query).get_json()['questions']
+        self.assertEqual([row['id'] for row in rows], [wanted])
+        for text in ("' OR 1=1 --", '%', '_', "O'Reilly"):
+            result = self.other.get('/api/qa/questions?' + urlencode({'q': text}))
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual([row['id'] for row in result.get_json()['questions']],
+                             [wanted] if text in ('%', '_', "O'Reilly") else [])
+
+    def test_paging_excludes_new_posts_and_keeps_combined_filters(self):
+        ids = [self.ask(title=f'Planning guide {i}') for i in range(21)]
+        self.ask(course_code='CSC 540', title='Planning guide outside course')
+        first = self.author.get('/api/qa/questions?course=CSC510&q=Planning').get_json()
+        added = self.ask(title='Planning guide newly posted')
+        second = self.author.get(f"/api/qa/questions?course=CSC510&q=Planning&before={first['next_before']}").get_json()
+        retrieved = [q['id'] for q in first['questions'] + second['questions']]
+        self.assertEqual(retrieved, list(reversed(ids)))
+        self.assertNotIn(added, retrieved)
+
+    def test_invalid_selection_and_non_author_clear_preserve_helpful_answer(self):
+        qid = self.ask()
+        aid = self.answer(qid)
+        url = f'/api/qa/questions/{qid}/helpful-answer'
+        self.author.put(url, json={'answer_id': aid})
+        self.assertEqual(self.other.put(url, json={'answer_id': None}).status_code, 403)
+        self.assertEqual(self.author.put(url, json={'answer_id': 999999}).status_code, 404)
+        self.assertEqual(self.author.get(f'/api/qa/questions/{qid}').get_json()['question']['helpful_answer_id'], aid)
+
+    def test_simultaneous_answers_cannot_exceed_capacity(self):
+        qid = self.ask()
+        with portal.get_db() as db:
+            db.execute("INSERT INTO course_answers(question_id,author_id,body) SELECT %s,%s,'Existing answer' FROM generate_series(1,199)", (qid, self.ids[1]))
+        barrier = Barrier(2)
+        def submit(sid):
+            client = self.client_for(sid)
+            barrier.wait(timeout=10)
+            return client.post(f'/api/qa/questions/{qid}/answers', json={'body': 'Last available answer'}).status_code
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            self.assertEqual(sorted(pool.map(submit, self.ids[1:])), [201, 409])
+        with portal.get_db() as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM course_answers WHERE question_id=%s', (qid,)).fetchone()['count'], 200)
+
+    def test_logout_removes_board_access_without_removing_content(self):
+        qid = self.ask()
+        self.answer(qid)
+        self.author.post('/api/auth/logout')
+        self.assertEqual(self.author.get(f'/api/qa/questions/{qid}').status_code, 401)
+        self.assertEqual(len(self.other.get(f'/api/qa/questions/{qid}').get_json()['answers']), 1)
+
+    def test_qa_coexists_with_real_login_requests_chat_completion_and_reviews(self):
+        clients, ids = [], []
+        for name in ('IntegrationRequester', 'IntegrationAdvisor'):
+            client = portal.app.test_client()
+            credentials = {'email': name.lower() + '@example.test', 'password': 'local integration test password'}
+            registration = client.post('/api/auth/register', json={**credentials, 'name': name,
+                'program': 'Computer Science', 'year': 'First Year', 'willing_to_advise': True,
+                'completed_courses': ['CSC 510']})
+            self.assertEqual(registration.status_code, 201)
+            ids.append(registration.get_json()['student']['id'])
+            self.assertEqual(client.post('/api/auth/login', json=credentials).status_code, 200)
+            clients.append(client)
+        requester, advisor = clients
+        q = requester.post('/api/qa/questions', json={'course_code': 'CSC510', 'title': 'Team planning', 'body': 'How should we start?'})
+        self.assertEqual(q.status_code, 201)
+        qid = q.get_json()['question']['id']
+        advice = requester.post('/api/requests', json={'recipient_id': ids[1], 'course_code': 'CSC 510',
+            'advice_topic': 'Projects', 'message': 'Can we discuss our plan privately?'})
+        self.assertEqual(advice.status_code, 201)
+        rid = advice.get_json()['request']['id']
+        self.assertEqual(advisor.patch(f'/api/requests/{rid}', json={'status': 'accepted'}).status_code, 200)
+        self.assertEqual(advisor.post(f'/api/requests/{rid}/messages', json={'body': 'Private advice, not a board post'}).status_code, 201)
+        reply = advisor.post(f'/api/qa/questions/{qid}/answers', json={'body': 'Assign owners before starting.'})
+        self.assertEqual(reply.status_code, 201)
+        aid = reply.get_json()['answer_id']
+        self.assertEqual(requester.put(f'/api/qa/questions/{qid}/helpful-answer', json={'answer_id': aid}).status_code, 200)
+        self.assertEqual(requester.patch(f'/api/requests/{rid}', json={'status': 'completed'}).status_code, 200)
+        self.assertEqual(requester.post(f'/api/requests/{rid}/review', json={'rating': 5, 'comment': 'Useful guidance'}).status_code, 201)
+        profile = requester.get(f'/api/students/{ids[1]}').get_json()['student']
+        self.assertEqual(profile['review_summary'], {'average_rating': 5.0, 'review_count': 1})
+        self.assertEqual(requester.get('/api/qa/questions?q=Private').get_json()['questions'], [])
+        self.assertEqual(self.other.get(f'/api/requests/{rid}/messages').status_code, 404)
+        self.assertEqual(self.other.get(f'/api/qa/questions/{qid}').get_json()['question']['helpful_answer_id'], aid)

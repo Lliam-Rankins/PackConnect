@@ -203,3 +203,157 @@ describe('course Q&A', () => {
     ).toHaveAttribute('aria-current', 'page')
   })
 })
+
+describe('Q&A failure recovery regressions', () => {
+  it('keeps question fields after a failed post and retries without duplicate submissions', async () => {
+    const user = userEvent.setup()
+    const pending = deferred()
+    fetch
+      .mockResolvedValueOnce(respond({ questions: [], next_before: null }))
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(respond({ question }))
+    render(<CourseQA user={{ id: 1 }} />)
+    await screen.findByText(/No questions found/)
+    await user.type(screen.getByLabelText('Question course code'), 'CSC 510')
+    await user.type(screen.getByLabelText('Question title'), question.title)
+    await user.type(screen.getByLabelText('Question details'), question.body)
+    await user.dblClick(screen.getByRole('button', { name: 'Post question' }))
+    expect(fetch).toHaveBeenCalledTimes(2)
+    pending.resolve({
+      ok: false,
+      json: async () => ({ error: 'Please try again.' }),
+    })
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Please try again',
+    )
+    expect(screen.getByLabelText('Question title')).toHaveValue(question.title)
+    expect(screen.getByLabelText('Question details')).toHaveValue(question.body)
+    await user.click(screen.getByRole('button', { name: 'Post question' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/app/qa/12'))
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not offer the saved answer for reposting when the following refresh fails', async () => {
+    const user = userEvent.setup()
+    fetch
+      .mockResolvedValueOnce(respond({ question, answers: [] }))
+      .mockResolvedValueOnce(respond({ answer_id: 45 }))
+      .mockRejectedValueOnce(new Error('Could not refresh the thread'))
+    render(<CourseQA user={{ id: 2 }} questionId="12" />)
+    await screen.findByText(/No answers yet/)
+    await user.type(screen.getByLabelText('Your answer'), answer.body)
+    await user.click(screen.getByRole('button', { name: 'Post answer' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not refresh',
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your answer was posted',
+    )
+    expect(screen.getByLabelText('Your answer')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Post answer' })).toBeDisabled()
+    expect(
+      fetch.mock.calls.filter(([, options]) => options?.method === 'POST'),
+    ).toHaveLength(1)
+  })
+
+  it('preserves the helpful marker if clearing it is rejected by the server', async () => {
+    const user = userEvent.setup()
+    fetch
+      .mockResolvedValueOnce(
+        respond({
+          ...detail,
+          question: { ...question, helpful_answer_id: answer.id },
+        }),
+      )
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'Sign in again.' }),
+      })
+    render(<CourseQA user={{ id: 1 }} questionId="12" />)
+    await user.click(
+      await screen.findByRole('button', { name: 'Clear helpful answer' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign in again')
+    expect(
+      screen.getByText('Helpful answer selected by the question author'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Clear helpful answer' }),
+    ).toBeEnabled()
+  })
+
+  it('keeps existing search results when loading more fails and retries the same page', async () => {
+    const user = userEvent.setup()
+    fetch
+      .mockResolvedValueOnce(
+        respond({ questions: [question], next_before: 12 }),
+      )
+      .mockRejectedValueOnce(new Error('Temporary connection problem'))
+      .mockResolvedValueOnce(
+        respond({
+          questions: [{ ...question, id: 11, title: 'Previous question' }],
+          next_before: null,
+        }),
+      )
+    render(<CourseQA user={{ id: 1 }} />)
+    await user.click(
+      await screen.findByRole('button', { name: 'Load more questions' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Temporary connection',
+    )
+    expect(
+      screen.getByRole('link', { name: question.title }),
+    ).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', { name: 'Load more questions' }),
+    )
+    expect(
+      await screen.findByRole('link', { name: 'Previous question' }),
+    ).toBeInTheDocument()
+    expect(fetch.mock.calls[1][0]).toBe(fetch.mock.calls[2][0])
+    expect(
+      screen.queryByRole('button', { name: 'Load more questions' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not allow empty or whitespace-only questions and answers to be submitted', async () => {
+    const user = userEvent.setup()
+    fetch.mockResolvedValueOnce(respond({ questions: [], next_before: null }))
+    const { unmount } = render(<CourseQA user={{ id: 1 }} />)
+    await screen.findByText(/No questions found/)
+    await user.type(screen.getByLabelText('Question course code'), 'CSC 510')
+    await user.type(screen.getByLabelText('Question title'), '   ')
+    await user.type(screen.getByLabelText('Question details'), 'Valid details')
+    expect(screen.getByRole('button', { name: 'Post question' })).toBeDisabled()
+    unmount()
+    fetch.mockResolvedValueOnce(respond(detail))
+    render(<CourseQA user={{ id: 2 }} questionId="12" />)
+    await screen.findByText(answer.body)
+    await user.type(screen.getByLabelText('Your answer'), '   ')
+    expect(screen.getByRole('button', { name: 'Post answer' })).toBeDisabled()
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows capacity information without allowing another answer on a full thread', async () => {
+    fetch.mockResolvedValueOnce(
+      respond({
+        question,
+        answers: Array.from({ length: 200 }, (_, i) => ({
+          ...answer,
+          id: i + 1,
+        })),
+      }),
+    )
+    render(<CourseQA user={{ id: 2 }} questionId="12" />)
+    expect(
+      await screen.findByText(
+        'This question has reached its 200-answer limit.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('Your answer')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Post answer' }),
+    ).not.toBeInTheDocument()
+  })
+})

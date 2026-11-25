@@ -30,6 +30,8 @@ See the [Step 1 baseline audit](docs/STEP_1_AUDIT.md) for verified behavior, lim
 
 ## Current features
 
+- **Course Q&A board:** signed-in members can post course questions, answer, and search reusable advice. The question author can select a helpful answer. Filter by course and helpful-answer status. Apply migrations first; see [setup, permissions and demo](docs/COURSE_QA.md).
+
 - Register an account with email, password, and a student profile. Passwords are hashed; emails remain private. Advising is optional.
 - Create and edit profiles with completed/current courses, skills, and advice topics. Only the signed-in owner can edit their profile; the API rejects unauthenticated or non-owner updates.
 - Set an open-request limit and pause new advice requests until a chosen date. Search and profiles show availability and capacity; the backend prevents concurrent overbooking. Complete accepted advice from Requests to free a slot and keep read-only message history. See [availability and migration instructions](docs/ADVISOR_AVAILABILITY.md).

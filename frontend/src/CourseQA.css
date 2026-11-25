@@ -1,0 +1,68 @@
+.course-qa {
+  max-width: 960px;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+}
+.course-qa label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+.course-qa input,
+.course-qa textarea,
+.course-qa select {
+  font: inherit;
+  padding: 0.65rem;
+  border: 1px solid #a8adb5;
+  border-radius: 0.35rem;
+  min-width: 0;
+}
+.course-qa button {
+  font: inherit;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+}
+.course-qa button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.qa-filters,
+.qa-post {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem;
+  border: 1px solid #d9dde3;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+  background: white;
+}
+.qa-list {
+  list-style: none;
+  padding: 0;
+}
+.qa-list li {
+  padding: 1rem 0;
+  border-bottom: 1px solid #d9dde3;
+}
+.qa-list a {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.qa-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.qa-helpful {
+  font-weight: 700;
+  color: #216638;
+}
+.course-qa :focus-visible {
+  outline: 3px solid #315cd6;
+  outline-offset: 3px;
+}
+@media (min-width: 700px) {
+  .qa-filters {
+    grid-template-columns: 1fr 2fr;
+  }
+}

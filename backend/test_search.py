@@ -60,15 +60,32 @@ class SearchTests(PostgresTestCase):
         for query in ("csc", " CSC ", "csc5", "CSC-5"):
             response = self.client.get('/api/courses', query_string={"q": query})
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.get_json(), {"courses": ["CSC 510", "CSC 540"]})
+            self.assertEqual(response.get_json()["courses"], ["CSC 510", "CSC 540"])
         self.assert_matches(["Ada", "Blake", "Casey", "Faye"], course="CSC510")
+
+    def test_course_title_matches_multiple_codes_and_preserves_filters(self):
+        with portal.get_db() as db:
+            db.execute("INSERT INTO completed_courses (student_id, course_code) VALUES (%s, 'csc-326'), (%s, 'CSC 326')",
+                       (self.ids["Ada"], self.ids["Eli"]))
+        query = "  SOFTWARE  EnginEER  "
+        response = self.client.get('/api/courses', query_string={"q": query})
+        self.assertEqual(response.get_json(), {
+            "courses": ["CSC 326", "CSC 510"],
+            "titles": {"CSC 326": "Software Engineering", "CSC 510": "Software Engineering"},
+        })
+        self.assert_matches(["Ada", "Blake", "Casey", "Eli", "Faye"], course=query)
+        self.assert_matches(["Ada", "Eli"], course=query, program="computer", year="second",
+                            advice_topics="projects")
+        self.assert_matches(["Ada", "Eli"], course="CSC 326")
 
     def test_course_suggestions_only_include_registered_completed_courses(self):
         with portal.get_db() as db:
             db.execute("DELETE FROM accounts WHERE student_id = %s", (self.ids["Eli"],))
-            db.execute("INSERT INTO current_courses (student_id, course_code) VALUES (%s, 'CSC 555')",
+            db.execute("INSERT INTO current_courses (student_id, course_code) VALUES (%s, 'CSC 540')",
                        (self.ids["Ada"],))
-        self.assertEqual(self.client.get('/api/courses?q=CSC').get_json(), {"courses": ["CSC 510"]})
+        self.assertEqual(self.client.get('/api/courses?q=CSC').get_json()["courses"], ["CSC 510"])
+        self.assertEqual(self.client.get('/api/courses?q=database').get_json()["courses"], [])
+        self.assert_matches([], course="database")
 
     def test_suggested_code_finds_legacy_course_format_and_updates_with_profile(self):
         with portal.get_db() as db:
@@ -84,7 +101,7 @@ class SearchTests(PostgresTestCase):
             "completed_courses": ["ECE 571"], "willing_to_advise": True,
         })
         self.assertEqual(response.status_code, 200, response.get_json())
-        self.assertEqual(self.client.get('/api/courses?q=ECE').get_json(), {"courses": ["ECE 571"]})
+        self.assertEqual(self.client.get('/api/courses?q=ECE').get_json(), {"courses": ["ECE 571"], "titles": {}})
         self.assert_matches([], course="ECE 570")
         self.assert_matches(["Eli"], course="ECE571")
 
@@ -97,7 +114,7 @@ class SearchTests(PostgresTestCase):
         self.assertEqual(courses, [f"CSC {n}" for n in range(600, 610)])
         for query in ('', ' ', '%', '_', "' OR 1=1 --", 'C' * 31, 'NONEXISTENT'):
             self.assertEqual(self.client.get('/api/courses', query_string={"q": query}).get_json(),
-                             {"courses": []})
+                             {"courses": [], "titles": {}})
 
     def test_profiles_without_accounts_are_excluded_from_search(self):
         with portal.get_db() as db:

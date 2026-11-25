@@ -52,7 +52,7 @@ describe('course autocomplete', () => {
       await user.type(screen.getByRole('combobox'), 'CSC510')
       expect(
         await screen.findByText(
-          'Suggestions unavailable. You can still search by course code.',
+          'Suggestions unavailable. You can still search by course code or title.',
         ),
       ).toBeInTheDocument()
       await user.keyboard('{Enter}')

@@ -84,6 +84,18 @@ it('shows advisor ratings and course feedback on the profile page', async () => 
 
 describe('peer search', () => {
   it('searches with the selected suggestion and preserves advanced filters', async () => {
+    const normalFetch = fetch.getMockImplementation()
+    fetch.mockImplementation((url, options) =>
+      url.startsWith('/api/courses?')
+        ? response({
+            courses: ['CSC 326', 'CSC 510'],
+            titles: {
+              'CSC 326': 'Software Engineering',
+              'CSC 510': 'Software Engineering',
+            },
+          })
+        : normalFetch(url, options),
+    )
     const user = userEvent.setup()
     render(<Workspace />)
     await screen.findByRole('heading', { name: student.name })
@@ -92,23 +104,60 @@ describe('peer search', () => {
       screen.getByRole('textbox', { name: 'Program' }),
       'Computer Science',
     )
-    const input = screen.getByRole('combobox', { name: 'Course code' })
+    const input = screen.getByRole('combobox', { name: 'Course code or title' })
     await user.clear(input)
-    await user.type(input, 'csc5')
-    await screen.findByRole('option', { name: 'CSC 540' })
+    await user.type(input, 'software engineering')
+    await screen.findByRole('option', {
+      name: 'CSC 510 — Software Engineering',
+    })
     const searches = () =>
       fetch.mock.calls.filter(([url]) =>
         url.startsWith('/api/students/search?'),
       )
     expect(searches()).toHaveLength(1)
     await user.keyboard('{ArrowUp}{Enter}')
-    expect(input).toHaveValue('CSC 540')
+    expect(input).toHaveValue('CSC 510')
     expect(searches()).toHaveLength(1)
     await user.keyboard('{Enter}')
     await waitFor(() => expect(searches()).toHaveLength(2))
     expect(searches()[1][0]).toBe(
-      '/api/students/search?course=CSC+540&program=Computer+Science&available=true',
+      '/api/students/search?course=CSC+510&program=Computer+Science&available=true',
     )
+  })
+
+  it('keeps the matching course code in advice requests after a title search', async () => {
+    const advisor = {
+      ...student,
+      id: 2,
+      name: 'Jordan Lee',
+      completed_courses: ['CSC 540', 'CSC 326'],
+    }
+    const titleSearch =
+      '/api/students/search?course=Software+Engineering&available=true'
+    const normalFetch = fetch.getMockImplementation()
+    fetch.mockImplementation((url, options) => {
+      if (url === titleSearch)
+        return response({
+          students: [advisor],
+          course_codes: ['CSC326', 'CSC510'],
+        })
+      if (url === '/api/students/2') return response({ student: advisor })
+      return normalFetch(url, options)
+    })
+    const user = userEvent.setup()
+    render(<Workspace />)
+    await screen.findByRole('heading', { name: student.name })
+    const input = screen.getByRole('combobox', { name: 'Course code or title' })
+    await user.clear(input)
+    await user.type(input, 'Software Engineering')
+    await user.click(screen.getByRole('button', { name: 'Find Students' }))
+    await screen.findByRole('heading', { name: advisor.name })
+    await user.click(screen.getByRole('link', { name: /View Profile/ }))
+    const course = await screen.findByRole('textbox', {
+      name: 'Course',
+      exact: true,
+    })
+    expect(course).toHaveValue('CSC 326')
   })
 
   it('shows loading, then matching peers, and submits the entered course', async () => {
@@ -121,9 +170,11 @@ describe('peer search', () => {
     expect(
       await screen.findByRole('heading', { name: student.name }),
     ).toBeInTheDocument()
-    await user.clear(screen.getByRole('combobox', { name: 'Course code' }))
+    await user.clear(
+      screen.getByRole('combobox', { name: 'Course code or title' }),
+    )
     await user.type(
-      screen.getByRole('combobox', { name: 'Course code' }),
+      screen.getByRole('combobox', { name: 'Course code or title' }),
       'CSC 540',
     )
     await user.click(screen.getByRole('button', { name: 'Find Students' }))
@@ -141,7 +192,9 @@ describe('peer search', () => {
     expect(screen.getByText('Searching for students...')).toBeInTheDocument()
     pending.resolve(response([]))
     expect(
-      await screen.findByText('No students found. Try another course code.'),
+      await screen.findByText(
+        'No students found. Try another course code or title.',
+      ),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: student.name }),

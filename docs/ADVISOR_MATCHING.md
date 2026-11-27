@@ -217,6 +217,18 @@ database access, so it is unit-tested directly.
    Run it again until it embeds zero profiles. Profiles without vectors still rank
    by keyword, so this step is not required for the feature to work.
 
+4. Optional: add fictional demo data to try matching (`just seed` from `backend/`):
+
+   ```sh
+   DEMO_PASSWORD='choose-a-password' python backend/seed_demo.py
+   ```
+
+   It creates six advisors with reviews and helpful Q&A answers, plus two students
+   to sign in as (`riley@packconnect.test`, `casey@packconnect.test`). Without
+   `DEMO_PASSWORD` it prints a generated password. Re-running does nothing. It refuses
+   a non-local database unless you pass `--allow-hosted`, because demo users would
+   be visible to real users.
+
 ### Local backend tests
 
 Tests run against a PostgreSQL database that has pgvector. A local container:

@@ -28,6 +28,10 @@ expire:
 embed:
     {{python}} embed_profiles.py
 
+# Seed fictional demo advisors and students (local DB only unless `just seed --allow-hosted`)
+seed *args:
+    {{python}} seed_demo.py {{args}}
+
 # Run the full unittest suite
 test:
     {{python}} -m unittest discover -s . -p 'test_*.py' -v

@@ -12,6 +12,20 @@ from database import connect_database
 MIGRATIONS = Path(__file__).resolve().parents[1] / "supabase" / "migrations"
 
 
+def migration_digests(path):
+    """Return (digest to record, digests that count as already applied).
+
+    Hashes LF-normalised text, so a checkout with CRLF line endings (e.g. Windows)
+    matches the same migration; raw and CRLF hashes recorded by older runs still match.
+    """
+    raw = path.read_bytes()
+    lf = raw.replace(b"\r\n", b"\n")
+    digest = hashlib.sha256(lf).hexdigest()
+    accepted = {digest, hashlib.sha256(raw).hexdigest(),
+                hashlib.sha256(lf.replace(b"\n", b"\r\n")).hexdigest()}
+    return digest, accepted
+
+
 def migration_sql(path):
     # The runner owns the transaction, including migration history.
     return "\n".join(line for line in path.read_text().splitlines()
@@ -34,9 +48,9 @@ def apply_migrations(database_url):
         applied = {row["name"]: row["sha256"] for row in
                    db.execute("SELECT name, sha256 FROM public.packconnect_migrations")}
         for path in sorted(MIGRATIONS.glob("*.sql")):
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            digest, accepted = migration_digests(path)
             if path.name in applied:
-                if applied[path.name] != digest:
+                if applied[path.name] not in accepted:
                     raise RuntimeError(f"Applied migration changed: {path.name}")
                 continue
             db.execute(migration_sql(path), prepare=False)
@@ -53,6 +67,10 @@ if __name__ == "__main__":
     load_dotenv(Path(__file__).parent / ".env")
     try:
         apply_migrations(os.getenv("SUPABASE_DB_URL"))
+    except RuntimeError as exc:
+        # Raised by this runner with only a migration file name; safe to show.
+        print(f"Migration failed: {exc}")
+        raise SystemExit(1) from None
     except Exception as exc:
         # Connection errors may contain user/host information; never echo a DSN.
         print(f"Migration failed ({type(exc).__name__}). Check configuration and schema compatibility.")

@@ -1,0 +1,3 @@
+# Supabase credentials for Vite frontend real-time subscriptions
+VITE_SUPABASE_URL=https://asafsorslqaywwyalxvm.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_EYViHEXndoCG5PpjTkBrSw_LNpjPx2B

@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -520,5 +526,162 @@ describe('peer profile request controls', () => {
     expect(
       screen.queryByRole('button', { name: 'Send request' }),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('advisor recommendations', () => {
+  const ranked = [
+    {
+      ...student,
+      id: 5,
+      name: 'Zed Zane',
+      match: {
+        score: 0.9,
+        breakdown: {},
+        reasons: [
+          { type: 'keyword', terms: ['testing', 'flask'] },
+          { type: 'rating', average: 4.5, count: 3 },
+        ],
+      },
+    },
+    {
+      ...student,
+      id: 6,
+      name: 'Amy Ames',
+      match: {
+        score: 0.5,
+        breakdown: {},
+        reasons: [{ type: 'semantic', field: 'advice_topics' }],
+      },
+    },
+  ]
+  const recs = () =>
+    fetch.mock.calls.filter(([url]) =>
+      url.startsWith('/api/students/recommendations?'),
+    )
+  const searches = () =>
+    fetch.mock.calls.filter(([url]) => url.startsWith('/api/students/search?'))
+  function mockRecommendations(reply) {
+    const normalFetch = fetch.getMockImplementation()
+    fetch.mockImplementation((url, options) =>
+      url.startsWith('/api/students/recommendations?')
+        ? Promise.resolve(reply)
+        : normalFetch(url, options),
+    )
+  }
+  async function submitNeed(text, courseText) {
+    const user = userEvent.setup()
+    render(<Workspace />)
+    await screen.findByRole('heading', { name: student.name })
+    if (courseText !== undefined) {
+      const input = screen.getByRole('combobox', {
+        name: 'Course code or title',
+      })
+      await user.clear(input)
+      if (courseText) await user.type(input, courseText)
+    }
+    await user.type(screen.getByLabelText('What do you need help with?'), text)
+    await user.click(screen.getByRole('button', { name: 'Find Students' }))
+    return user
+  }
+
+  it('limits the need field to 300 characters', async () => {
+    render(<Workspace />)
+    expect(
+      screen.getByLabelText('What do you need help with?'),
+    ).toHaveAttribute('maxlength', '300')
+  })
+
+  it('uses the plain search endpoint when need is empty', async () => {
+    const user = userEvent.setup()
+    render(<Workspace />)
+    await screen.findByRole('heading', { name: student.name })
+    await user.click(screen.getByRole('button', { name: 'Find Students' }))
+    await waitFor(() => expect(searches()).toHaveLength(2))
+    expect(recs()).toHaveLength(0)
+    expect(screen.queryByText('Best match')).not.toBeInTheDocument()
+  })
+
+  it('uses the recommendations endpoint and encodes the need', async () => {
+    mockRecommendations(response({ students: ranked }))
+    await submitNeed('testing & flask?')
+    await screen.findByText('Zed Zane')
+    expect(recs()).toHaveLength(1)
+    expect(recs()[0][0]).toBe(
+      '/api/students/recommendations?course=CSC+510&need=testing+%26+flask%3F&available=true',
+    )
+  })
+
+  it('passes advanced filters to recommendations', async () => {
+    mockRecommendations(response({ students: ranked }))
+    const user = userEvent.setup()
+    render(<Workspace />)
+    await screen.findByRole('heading', { name: student.name })
+    await user.click(screen.getByText('Advanced filters'))
+    await user.type(screen.getByRole('textbox', { name: 'Program' }), 'MSCS')
+    await user.type(screen.getByLabelText('What do you need help with?'), 'x')
+    await user.click(screen.getByRole('button', { name: 'Find Students' }))
+    await screen.findByText('Zed Zane')
+    expect(recs()[0][0]).toContain('program=MSCS')
+  })
+
+  it('keeps the server ranking instead of sorting by name', async () => {
+    mockRecommendations(response({ students: ranked }))
+    await submitNeed('testing')
+    await screen.findByText('Zed Zane')
+    const names = screen.getAllByRole('heading', { level: 4 })
+    expect(names.map((h) => h.textContent)).toEqual(['Zed Zane', 'Amy Ames'])
+  })
+
+  it('shows reason chips and marks only the top card as best match', async () => {
+    mockRecommendations(response({ students: ranked }))
+    await submitNeed('testing')
+    await screen.findByText('Zed Zane')
+    expect(screen.getByText('Mentions testing, flask')).toBeInTheDocument()
+    expect(screen.getByText('Rated 4.5 (3 reviews)')).toBeInTheDocument()
+    expect(screen.getByText('Similar advice topics')).toBeInTheDocument()
+    expect(screen.getAllByText('Best match')).toHaveLength(1)
+    const [first] = screen.getAllByRole('article')
+    expect(within(first).getByText('Best match')).toBeInTheDocument()
+  })
+
+  it('asks for a course when need is given without one', async () => {
+    await submitNeed('testing', '')
+    expect(
+      await screen.findByText(/Enter a course to get recommendations/),
+    ).toBeInTheDocument()
+    expect(recs()).toHaveLength(0)
+  })
+
+  it.each([
+    [401, 'Sign in required.'],
+    [400, 'need is too long.'],
+  ])('shows the endpoint error on %i', async (status, message) => {
+    mockRecommendations(response({ error: message }, status))
+    await submitNeed('testing')
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(screen.queryByText(/Could not connect/)).not.toBeInTheDocument()
+  })
+
+  it('shows the connection message on a server error', async () => {
+    mockRecommendations(response({ error: 'boom' }, 500))
+    await submitNeed('testing')
+    expect(await screen.findByText(/Could not connect/)).toBeInTheDocument()
+  })
+
+  it('refetches recommendations after a profile save in recommendation mode', async () => {
+    mockRecommendations(response({ students: ranked }))
+    const user = await submitNeed('testing')
+    await screen.findByText('Zed Zane')
+    const normalFetch = fetch.getMockImplementation()
+    fetch.mockImplementation((url, options) =>
+      url === '/api/students/1' && options?.method === 'PUT'
+        ? Promise.resolve(response({ student }))
+        : normalFetch(url, options),
+    )
+    window.location.hash = '/app/profile/edit'
+    await user.click(await screen.findByRole('button', { name: /save/i }))
+    await waitFor(() => expect(recs()).toHaveLength(2))
+    expect(searches()).toHaveLength(1)
   })
 })

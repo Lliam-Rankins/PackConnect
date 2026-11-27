@@ -27,7 +27,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -75,6 +75,59 @@ jobs:
           files: ./coverage.xml
           use_oidc: true
           fail_ci_if_error: true
+
+  m0-eval:
+    name: M0 matching evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ""
+      SUPABASE_SECRET_KEY: ""
+      SUPABASE_DB_URL: ""
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/packconnect_test?sslmode=disable
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed_cache
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: packconnect_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+
+      - name: Cache fastembed model
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FASTEMBED_CACHE_PATH }}
+          key: fastembed-BAAI-bge-small-en-v1.5
+
+      - name: Run eval tests
+        run: python -m unittest discover -s eval -p "test_*.py"
+
+      - name: Run M0 evaluation (reports claims; fails only if the script crashes)
+        run: python eval/run_m0.py --tune eval/data/seed1.json
 
   frontend:
     name: Frontend tests, lint and build

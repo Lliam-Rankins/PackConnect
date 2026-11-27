@@ -10,6 +10,7 @@ import {
   Moderation,
 } from './Community'
 import CourseAutocomplete from './CourseAutocomplete'
+import MatchReasons from './MatchReasons'
 import { availabilityLabel, capacityLabel } from './advisorAvailability'
 import { AdvisorReviews } from './AdvisorReviews'
 import CourseQA from './CourseQA'
@@ -67,6 +68,9 @@ function App({ user, onLogout, route, onUserUpdated }) {
   const [course, setCourse] = useState('CSC 510')
   const [matchedCourseKeys, setMatchedCourseKeys] = useState(['CSC510'])
   const [filters, setFilters] = useState(emptyFilters)
+  const [need, setNeed] = useState('')
+  // Course and need of the last recommendation search; null for a plain search.
+  const [recommendation, setRecommendation] = useState(null)
   const [students, setStudents] = useState([])
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [profileError, setProfileError] = useState({ route: '', message: '' })
@@ -86,10 +90,15 @@ function App({ user, onLogout, route, onUserUpdated }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
-  function searchUrl(searchCourse = course, searchFilters = filters) {
+  function searchUrl(
+    searchCourse = course,
+    searchFilters = filters,
+    searchNeed = '',
+  ) {
     const params = new URLSearchParams()
 
     if (searchCourse.trim()) params.set('course', searchCourse.trim())
+    if (searchNeed) params.set('need', searchNeed)
     if (searchFilters.program.trim()) {
       params.set('program', searchFilters.program.trim())
     }
@@ -102,7 +111,8 @@ function App({ user, onLogout, route, onUserUpdated }) {
     }
     params.set('available', String(searchFilters.availableOnly))
 
-    return `${API_URL}/api/students/search?${params.toString()}`
+    const path = searchNeed ? 'recommendations' : 'search'
+    return `${API_URL}/api/students/${path}?${params.toString()}`
   }
 
   function hasSearchCriteria(searchCourse = course, searchFilters = filters) {
@@ -118,7 +128,15 @@ function App({ user, onLogout, route, onUserUpdated }) {
   async function searchStudents(
     searchCourse = course,
     searchFilters = filters,
+    searchNeed = need.trim(),
   ) {
+    if (searchNeed && !searchCourse.trim()) {
+      setError('Enter a course to get recommendations for what you need.')
+      setStudents([])
+      setMatchedCourseKeys([])
+      setRecommendation(null)
+      return
+    }
     if (!hasSearchCriteria(searchCourse, searchFilters)) {
       setError('Enter a course code, title, or at least one filter.')
       setStudents([])
@@ -132,13 +150,25 @@ function App({ user, onLogout, route, onUserUpdated }) {
     setSelectedStudent(null)
 
     try {
-      const response = await fetch(searchUrl(searchCourse, searchFilters))
+      const response = await fetch(
+        searchUrl(searchCourse, searchFilters, searchNeed),
+      )
 
       if (!response.ok) {
+        const body = searchNeed ? await response.json().catch(() => ({})) : {}
+        if (response.status < 500 && body.error) {
+          setError(body.error)
+          setStudents([])
+          setRecommendation(null)
+          return
+        }
         throw new Error('Unable to search students.')
       }
 
       const data = await response.json()
+      setRecommendation(
+        searchNeed ? { course: searchCourse, need: searchNeed } : null,
+      )
       setStudents(Array.isArray(data) ? data : (data.students ?? []))
       setMatchedCourseKeys(
         data.course_codes ??
@@ -171,7 +201,7 @@ function App({ user, onLogout, route, onUserUpdated }) {
   function resetFilters() {
     const resetState = { ...emptyFilters }
     setFilters(resetState)
-    searchStudents(course, resetState)
+    searchStudents(course, resetState, need.trim())
   }
 
   function profileMatchesSearch(student, completedCourses) {
@@ -273,31 +303,36 @@ function App({ user, onLogout, route, onUserUpdated }) {
 
       if (!response.ok) throw new Error(data.error || 'Unable to save profile.')
 
+      // Recommendation order is server-ranked, so refetch instead of patching.
+      if (recommendation) {
+        searchStudents(recommendation.course, filters, recommendation.need)
+      }
       setSelectedStudent(data.student)
       window.location.hash = '/app/profile'
       setEditingStudentId(null)
       setProfileForm(emptyProfile)
       setNotice('Profile updated.')
       onUserUpdated(data.student)
-      setStudents((currentStudents) => {
-        if (!profileMatchesSearch(data.student, payload.completed_courses)) {
-          return currentStudents.filter(
-            (student) => student.id !== data.student.id,
+      if (!recommendation)
+        setStudents((currentStudents) => {
+          if (!profileMatchesSearch(data.student, payload.completed_courses)) {
+            return currentStudents.filter(
+              (student) => student.id !== data.student.id,
+            )
+          }
+
+          const summary = data.student
+
+          if (currentStudents.some((student) => student.id === summary.id)) {
+            return currentStudents.map((student) =>
+              student.id === summary.id ? summary : student,
+            )
+          }
+
+          return [...currentStudents, summary].sort((first, second) =>
+            first.name.localeCompare(second.name),
           )
-        }
-
-        const summary = data.student
-
-        if (currentStudents.some((student) => student.id === summary.id)) {
-          return currentStudents.map((student) =>
-            student.id === summary.id ? summary : student,
-          )
-        }
-
-        return [...currentStudents, summary].sort((first, second) =>
-          first.name.localeCompare(second.name),
-        )
-      })
+        })
     } catch (err) {
       setError(err.message || 'Could not save the student profile.')
     } finally {
@@ -482,6 +517,15 @@ function App({ user, onLogout, route, onUserUpdated }) {
               }}
             >
               <CourseAutocomplete value={course} onChange={setCourse} />
+              <label className="need-field">
+                What do you need help with?
+                <input
+                  value={need}
+                  maxLength={300}
+                  onChange={(event) => setNeed(event.target.value)}
+                  placeholder="e.g. testing Flask apps"
+                />
+              </label>
               <button type="submit" disabled={loading}>
                 {loading ? 'Searching...' : 'Find Students'}
               </button>
@@ -824,7 +868,7 @@ function App({ user, onLogout, route, onUserUpdated }) {
               </p>
             ) : (
               <div className="student-grid">
-                {students.map((student) => (
+                {students.map((student, index) => (
                   <article className="student-card" key={student.id}>
                     <div className="avatar">
                       {student.name
@@ -857,6 +901,12 @@ function App({ user, onLogout, route, onUserUpdated }) {
                       {availabilityLabel(student)}
                     </span>
                     <p className="profile-note">{capacityLabel(student)}</p>
+                    {student.match && (
+                      <MatchReasons
+                        reasons={student.match.reasons}
+                        best={index === 0}
+                      />
+                    )}
 
                     <a
                       className="profile-button peer-profile-link"

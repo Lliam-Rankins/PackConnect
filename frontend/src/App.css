@@ -169,6 +169,16 @@ button {
   max-width: 620px;
   margin: auto;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.need-field {
+  flex: 1 1 100%;
+  order: 3;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  font-weight: 600;
 }
 
 .search-form input {

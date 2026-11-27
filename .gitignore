@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.*
 
 # Local database backups
 .local-backups/
@@ -25,3 +26,5 @@ dist/
 # Browser test artifacts
 frontend/playwright-report/
 frontend/test-results/
+
+.codegraph

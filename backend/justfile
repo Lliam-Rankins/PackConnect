@@ -1,0 +1,41 @@
+# PackConnect backend — run from backend/ with `just <recipe>`
+
+set dotenv-load := true
+set shell := ["bash", "-cu"]
+
+python := "../.venv/bin/python"
+
+default:
+    @just --list
+
+# Install deps into the repo-root venv
+install:
+    {{python}} -m pip install -r requirements.txt
+
+# Start Flask on :5000
+run:
+    {{python}} app.py
+
+# Apply versioned SQL migrations (supabase/migrations)
+migrate:
+    {{python}} migrate.py
+
+# Expire unanswered advice requests
+expire:
+    {{python}} expire_requests.py
+
+# Sweep and embed advisor profiles
+embed:
+    {{python}} embed_profiles.py
+
+# Run the full unittest suite
+test:
+    {{python}} -m unittest discover -s . -p 'test_*.py' -v
+
+# Run one test module, e.g. `just test-one test_auth`
+test-one name:
+    {{python}} -m unittest {{name}} -v
+
+# Live Supabase integration tests (needs SUPABASE_SECRET_KEY)
+test-supabase:
+    RUN_SUPABASE_INTEGRATION=1 {{python}} -m unittest discover -s . -p 'test_supabase_integration.py' -v

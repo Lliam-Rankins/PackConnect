@@ -212,3 +212,20 @@ class ProfileVectorTests(PostgresTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StartupSweepTests(PostgresTestCase):
+    def test_missing_tables_log_migration_hint_instead_of_raising(self):
+        with portal.get_db() as db:
+            db.execute("DROP TABLE profile_embeddings")
+        with self.assertLogs(portal.app.logger, "WARNING") as logs:
+            portal.sweep_profile_embeddings()
+        self.assertIn("migrate.py", logs.output[0])
+
+    def test_unexpected_failure_logs_retry_hint(self):
+        original = profile_vectors.sweep
+        profile_vectors.sweep = lambda *args: (_ for _ in ()).throw(RuntimeError("boom"))
+        self.addCleanup(setattr, profile_vectors, "sweep", original)
+        with self.assertLogs(portal.app.logger, "WARNING") as logs:
+            portal.sweep_profile_embeddings()
+        self.assertIn("embed_profiles.py", logs.output[0])

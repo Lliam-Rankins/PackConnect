@@ -3,7 +3,7 @@ from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 from flask.json.provider import DefaultJSONProvider
 from psycopg import OperationalError
-from psycopg.errors import UniqueViolation
+from psycopg.errors import UndefinedTable, UniqueViolation
 import re
 from werkzeug.security import generate_password_hash, check_password_hash
 from pathlib import Path
@@ -520,9 +520,20 @@ def send_message(student_id):
     return jsonify({"error": "Direct messages have moved to accepted-request conversations. Open Requests to chat."}), 410
 
 
+def sweep_profile_embeddings():
+    """Fill missing profile embeddings; a failed sweep never stops the server."""
+    try:
+        profile_vectors.sweep(get_db, app.config["EMBEDDER"])
+    except UndefinedTable:
+        app.logger.warning("Profile embedding sweep skipped: run `python backend/migrate.py` "
+                           "to create the advisor matching tables.")
+    except Exception as error:
+        app.logger.warning("Profile embedding sweep failed (%s); "
+                           "retry with `python backend/embed_profiles.py`.", type(error).__name__)
+
+
 if __name__ == "__main__":
     initialize_database()
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":  # the debug reloader's serving process only
-        threading.Thread(target=profile_vectors.sweep, args=(get_db, app.config["EMBEDDER"]),
-                         daemon=True).start()
+        threading.Thread(target=sweep_profile_embeddings, daemon=True).start()
     app.run(debug=True, port=5000)

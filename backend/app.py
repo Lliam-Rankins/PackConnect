@@ -3,23 +3,28 @@ from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 from flask.json.provider import DefaultJSONProvider
 from psycopg import OperationalError
-from psycopg.errors import UniqueViolation
+from psycopg.errors import UndefinedTable, UniqueViolation
 import re
 from werkzeug.security import generate_password_hash, check_password_hash
 from pathlib import Path
 from messaging import create_messaging_blueprint, initialize_messaging
 from database import connect_database
+from common.advisor_sql import COMPLETED_COURSE_KEY, advisor_conditions, profile_filters
 from identity import registered_student_sql, session_student_id
 from course_qa import create_course_qa_blueprint
 from community import create_community_blueprint
 from meetings import create_meetings_blueprint
 from recovery import create_recovery_blueprint
+from matching import profile_vectors
+from matching.embedder import FastEmbedEmbedder
+from matching.routes import create_matching_blueprint
 from lifecycle import lock_students
-from availability import availability_payload, workload_join, availability_columns, availability_status_sql
+from availability import availability_payload, workload_join, availability_columns
 from course_catalog import COURSE_TITLES, course_key, course_label, matching_title_codes
 
 import os
 import secrets
+import threading
 from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
 from supabase import create_client
@@ -64,6 +69,7 @@ app.config.update(
 CORS(app)
 
 app.config["SUPABASE_DB_URL"] = os.getenv("SUPABASE_DB_URL")
+app.config.setdefault("EMBEDDER", FastEmbedEmbedder())
 
 
 def get_db():
@@ -75,6 +81,7 @@ app.register_blueprint(create_community_blueprint(get_db))
 app.register_blueprint(create_course_qa_blueprint(get_db))
 app.register_blueprint(create_meetings_blueprint(get_db))
 app.register_blueprint(create_recovery_blueprint(get_db))
+app.register_blueprint(create_matching_blueprint(get_db, lambda: app.config["EMBEDDER"]))
 
 
 def normalize_courses(courses):
@@ -347,6 +354,7 @@ def register():
             db.cursor().executemany("""
                 INSERT INTO completed_courses (student_id, course_code) VALUES (%s, %s)
             """, [(student_id, course) for course in courses])
+            profile_vectors.refresh(db, app.config["EMBEDDER"], student_id)
     except UniqueViolation:
         return jsonify({"error": "An account with this email already exists."}), 409
 
@@ -358,9 +366,6 @@ def register():
 @app.route("/api/students", methods=["POST"])
 def create_student():
     return jsonify({"error": "Create your profile through account registration."}), 410
-
-
-COMPLETED_COURSE_KEY = "regexp_replace(UPPER(c.course_code), '[[:space:]-]+', '', 'g')"
 
 
 @app.route("/api/courses")
@@ -403,41 +408,13 @@ def search_students():
         return jsonify(students=[], course_codes=[])
 
     # Include both local accounts and confirmed Supabase registrations.
-    conditions = [registered_student_sql()]
-    parameters = []
-    viewer = session.get("student_id")
-    if viewer:
-        conditions.append("NOT EXISTS (SELECT 1 FROM student_blocks b WHERE (b.blocker_id=%s AND b.blocked_id=s.id) OR (b.blocker_id=s.id AND b.blocked_id=%s))")
-        parameters.extend([viewer,viewer])
-
-    course_codes = []
-    if course:
-        code = course_key(course)
-        course_codes = [code]
-        if code not in COURSE_TITLES:
-            course_codes.extend(matching_title_codes(course))
-        conditions.append(f"""
-            EXISTS (
-                SELECT 1
-                FROM completed_courses c
-                WHERE c.student_id = s.id
-                  AND {COMPLETED_COURSE_KEY} = ANY(%s::text[])
-            )
-        """)
-        parameters.append(course_codes)
-
-    if available != "false":
-        conditions.append(f"({availability_status_sql()}) = 'available'")
-
-    for column, value in (
-        ("s.program", program),
-        ("s.year", year),
-        ("s.skills", skills),
-        ("s.advice_topics", advice_topics),
-    ):
-        if value:
-            conditions.append(f"LOWER(COALESCE({column}, '')) LIKE %s")
-            parameters.append(f"%{value.lower()}%")
+    conditions, parameters, course_codes = advisor_conditions(session.get("student_id"), course)
+    filter_conditions, filter_parameters = profile_filters({
+        "program": program, "year": year, "skills": skills, "advice_topics": advice_topics,
+        "available": available != "false",
+    })
+    conditions += filter_conditions
+    parameters += filter_parameters
 
     where_clause = " AND ".join(conditions) if conditions else "1 = 1"
 
@@ -532,6 +509,7 @@ def update_student(student_id):
 
         replace_courses(db, "completed_courses", student_id, completed_courses)
         replace_courses(db, "current_courses", student_id, current_courses)
+        profile_vectors.refresh(db, app.config["EMBEDDER"], student_id)
         student = fetch_student(db, student_id)
 
     return jsonify({"student": student})
@@ -542,6 +520,20 @@ def send_message(student_id):
     return jsonify({"error": "Direct messages have moved to accepted-request conversations. Open Requests to chat."}), 410
 
 
+def sweep_profile_embeddings():
+    """Fill missing profile embeddings; a failed sweep never stops the server."""
+    try:
+        profile_vectors.sweep(get_db, app.config["EMBEDDER"])
+    except UndefinedTable:
+        app.logger.warning("Profile embedding sweep skipped: run `python backend/migrate.py` "
+                           "to create the advisor matching tables.")
+    except Exception as error:
+        app.logger.warning("Profile embedding sweep failed (%s); "
+                           "retry with `python backend/embed_profiles.py`.", type(error).__name__)
+
+
 if __name__ == "__main__":
     initialize_database()
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":  # the debug reloader's serving process only
+        threading.Thread(target=sweep_profile_embeddings, daemon=True).start()
     app.run(debug=True, port=5000)

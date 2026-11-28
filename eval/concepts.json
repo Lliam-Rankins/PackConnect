@@ -1,0 +1,508 @@
+{
+  "concepts": [
+    {
+      "id": "unit_testing",
+      "profile_phrases": [
+        "writing pytest suites",
+        "test-driven development workflows",
+        "mocking dependencies in unit checks",
+        "catching regressions with automated verification",
+        "coverage reports and test fixtures",
+        "JUnit assertions and stubs"
+      ],
+      "request_phrases": [
+        "how do I make sure my function keeps behaving after edits",
+        "stubbing out a database call so I can verify one piece alone",
+        "something that runs on every change and flags breakage",
+        "why does my module pass sometimes and fail other times",
+        "a good way to lock down expected outputs of small pieces"
+      ]
+    },
+    {
+      "id": "sql_databases",
+      "profile_phrases": [
+        "writing SQL joins and subqueries",
+        "PostgreSQL schema design",
+        "indexing tables for query speed",
+        "normalizing relational data models",
+        "database migrations and transactions",
+        "ORM queries with SQLAlchemy"
+      ],
+      "request_phrases": [
+        "my query takes forever on a big table",
+        "how should I arrange my fields so the same info is not stored twice",
+        "merging matching records from two sources",
+        "rolling back a half-finished change to stored records",
+        "why does my lookup crawl when there are millions of rows"
+      ]
+    },
+    {
+      "id": "react_frontend",
+      "profile_phrases": [
+        "building React components with hooks",
+        "state management in React apps",
+        "JSX and component props",
+        "Next.js server rendering",
+        "frontend routing with React Router",
+        "Redux store design"
+      ],
+      "request_phrases": [
+        "my web page doesn't update when I click things",
+        "passing data from parent widgets to children",
+        "a single-page app that switches screens without reloading",
+        "keeping shared app data in one place across screens",
+        "why does my interface re-draw too often"
+      ]
+    },
+    {
+      "id": "machine_learning",
+      "profile_phrases": [
+        "training classifiers with scikit-learn",
+        "gradient descent and loss functions",
+        "overfitting and cross-validation",
+        "neural network basics",
+        "feature engineering for predictive models",
+        "model evaluation metrics like precision and recall"
+      ],
+      "request_phrases": [
+        "my model is perfect on training data but bad on new data",
+        "teaching a program to sort emails into categories from examples",
+        "picking which columns to feed into a prediction",
+        "how to tell whether my predictions are actually good",
+        "why is my learning curve flat and not converging"
+      ]
+    },
+    {
+      "id": "c_pointers_debugging",
+      "profile_phrases": [
+        "pointer arithmetic in C",
+        "malloc and free memory management",
+        "segmentation faults and gdb",
+        "dangling pointers and buffer overflows",
+        "C struct layouts and arrays",
+        "valgrind memory leak hunting"
+      ],
+      "request_phrases": [
+        "my program crashes when I follow a link in memory",
+        "why do I get a bad access error with my addresses",
+        "tracking down where my reserved space never got released",
+        "stepping through a crashing binary to find the line",
+        "copying text into a fixed-size box overflows"
+      ]
+    },
+    {
+      "id": "git_workflows",
+      "profile_phrases": [
+        "resolving merge conflicts in git",
+        "branching strategies and pull requests",
+        "rebasing and cleaning commit history",
+        "git stash and reflog recovery",
+        "code review through GitHub pull requests",
+        "tagging releases with git"
+      ],
+      "request_phrases": [
+        "two people edited the same lines and the tool won't let me save",
+        "how do I undo a commit I already pushed",
+        "tidying up my messy series of saves before sharing",
+        "working on a feature without disturbing the main line",
+        "getting my changes into a teammate's review queue"
+      ]
+    },
+    {
+      "id": "project_time_management",
+      "profile_phrases": [
+        "planning sprints and milestones",
+        "estimating task effort for a team project",
+        "breaking big assignments into tasks",
+        "Gantt charts and project schedules",
+        "prioritizing work when deadlines collide",
+        "keeping a team on schedule"
+      ],
+      "request_phrases": [
+        "I have three deadlines in one week and no idea where to start",
+        "splitting a huge job into bite-sized pieces",
+        "how long will this chunk realistically take me",
+        "making a timeline so we finish before the due date",
+        "my crew runs behind on every checkpoint"
+      ]
+    },
+    {
+      "id": "interview_prep",
+      "profile_phrases": [
+        "practicing technical interview questions",
+        "whiteboard coding and algorithm puzzles",
+        "behavioral interview STAR answers",
+        "mock interviews with feedback",
+        "resume and LinkedIn review for recruiters",
+        "system design interview frameworks"
+      ],
+      "request_phrases": [
+        "how do I prepare for the job-hiring chats with engineers",
+        "solving brain teasers while a stranger watches me sketch on a wall",
+        "answering why-did-you prompts about my past",
+        "a rehearsal where someone grills me",
+        "making my CV stand out to hiring managers"
+      ]
+    },
+    {
+      "id": "latex_reports",
+      "profile_phrases": [
+        "typesetting equations in LaTeX",
+        "formatting bibliography with BibTeX",
+        "writing thesis templates in Overleaf",
+        "figures and tables in LaTeX documents",
+        "academic report formatting",
+        "math mode and cross-references"
+      ],
+      "request_phrases": [
+        "my typed paper looks ugly with the formulas",
+        "citations that come out in the required style",
+        "a layout that makes my long write-up look polished",
+        "placing pictures so they don't float around",
+        "linking to a section number from another part of my document"
+      ]
+    },
+    {
+      "id": "statistics_r",
+      "profile_phrases": [
+        "hypothesis testing with p-values",
+        "linear regression in R",
+        "ggplot2 visualizations of data",
+        "confidence intervals and sampling",
+        "ANOVA and t-tests",
+        "descriptive statistics and distributions"
+      ],
+      "request_phrases": [
+        "is my result just random noise or real",
+        "fitting a straight-line trend to my measurements",
+        "making charts from my survey spreadsheet",
+        "how wide should my error range be",
+        "comparing averages across three groups"
+      ]
+    },
+    {
+      "id": "cloud_deployment",
+      "profile_phrases": [
+        "deploying containers to AWS",
+        "Docker compose for local environments",
+        "Kubernetes pods and services",
+        "CI/CD pipelines with GitHub Actions",
+        "infrastructure as code with Terraform",
+        "Heroku and Vercel app hosting"
+      ],
+      "request_phrases": [
+        "getting my app onto the internet for real users",
+        "packaging my program so it runs the same on every machine",
+        "automatically publishing new builds whenever I merge",
+        "a setup script that provisions my servers",
+        "running many copies of my service with load spread out"
+      ]
+    },
+    {
+      "id": "algorithms",
+      "profile_phrases": [
+        "graph traversal with BFS and DFS",
+        "dynamic programming problems",
+        "binary search trees and heaps",
+        "sorting algorithms and their complexity",
+        "hash tables and collision handling",
+        "Big-O analysis of runtimes"
+      ],
+      "request_phrases": [
+        "finding the shortest route through a network of nodes",
+        "splitting a problem into overlapping smaller subproblems",
+        "keeping items ordered so lookups stay quick",
+        "why is my solution too slow for large inputs",
+        "storing key-value pairs for instant retrieval"
+      ]
+    },
+    {
+      "id": "linux_shell",
+      "profile_phrases": [
+        "bash scripting and shell pipelines",
+        "Linux file permissions and chmod",
+        "grep and sed text processing",
+        "cron jobs and process management",
+        "terminal navigation with ssh",
+        "environment variables in the shell"
+      ],
+      "request_phrases": [
+        "chaining several commands together in one go",
+        "why can't I run my file even though it exists",
+        "hunting for a phrase inside hundreds of logs",
+        "scheduling something to run every night on the server",
+        "connecting to a remote machine from my laptop prompt"
+      ]
+    },
+    {
+      "id": "computer_networking",
+      "profile_phrases": [
+        "TCP/IP and sockets",
+        "DNS and HTTP request flows",
+        "subnetting and IP addresses",
+        "network packet analysis with Wireshark",
+        "firewall rules and ports",
+        "REST API design over HTTP"
+      ],
+      "request_phrases": [
+        "my program can't reach another computer over the wire",
+        "why does a website name fail to resolve",
+        "dividing an address block into smaller networks",
+        "watching the raw traffic to see what's wrong",
+        "opening a door in the security wall for my service"
+      ]
+    },
+    {
+      "id": "object_oriented_design",
+      "profile_phrases": [
+        "object-oriented design in Java",
+        "design patterns like factory and observer",
+        "SOLID principles in code",
+        "inheritance versus composition",
+        "refactoring messy legacy classes",
+        "dependency injection in services"
+      ],
+      "request_phrases": [
+        "my classes are tangled and every change breaks something elsewhere",
+        "a clean way to swap out how instances get built",
+        "making one part notify others when it changes",
+        "why I should favor building things from parts rather than family trees",
+        "untangling a base that grew too big to touch"
+      ]
+    },
+    {
+      "id": "data_wrangling",
+      "profile_phrases": [
+        "pandas dataframes and joins",
+        "cleaning messy CSV data",
+        "NumPy array operations",
+        "data pipelines in Python",
+        "merging and grouping tables",
+        "handling missing values in datasets"
+      ],
+      "request_phrases": [
+        "my spreadsheet export has blanks everywhere",
+        "reshaping a big table so I can count things per group",
+        "turning raw files into a tidy form for analysis",
+        "combining two exports on a shared key",
+        "numeric operations over whole columns quickly"
+      ]
+    },
+    {
+      "id": "web_accessibility",
+      "profile_phrases": [
+        "WCAG color contrast",
+        "screen reader support with ARIA",
+        "keyboard navigation in web apps",
+        "alt text for images",
+        "accessible forms and labels",
+        "accessibility audits with axe"
+      ],
+      "request_phrases": [
+        "blind users can't use my site",
+        "making sure someone without a mouse can still click everything",
+        "my buttons read out as gibberish",
+        "checking whether my text is readable for low-vision people",
+        "tagging my inputs so tools understand them"
+      ]
+    },
+    {
+      "id": "application_security",
+      "profile_phrases": [
+        "penetration testing with Kali",
+        "SQL injection and XSS defenses",
+        "password hashing and salting",
+        "encryption with TLS certificates",
+        "threat modeling for web apps",
+        "OWASP top ten vulnerabilities"
+      ],
+      "request_phrases": [
+        "how do hackers get into a login form and how do I stop it",
+        "storing user credentials so a leak doesn't expose them",
+        "scrambling data so only the right key holder reads it",
+        "finding weak spots before an attacker does",
+        "making sure visitors connect securely to my site"
+      ]
+    },
+    {
+      "id": "mobile_apps",
+      "profile_phrases": [
+        "Android apps in Kotlin",
+        "Jetpack Compose layouts",
+        "SwiftUI for iOS screens",
+        "mobile app navigation patterns",
+        "Flutter cross-platform widgets",
+        "push notifications on phones"
+      ],
+      "request_phrases": [
+        "my handheld program falls over when the device is turned sideways",
+        "one codebase that runs on both iPhone and the other major handheld OS",
+        "buttons and lists that look native on a handheld",
+        "sending alerts to a user's device when something happens",
+        "moving between pages in a touch app"
+      ]
+    },
+    {
+      "id": "ux_research_design",
+      "profile_phrases": [
+        "wireframing in Figma",
+        "user research interviews",
+        "usability testing with real people",
+        "information architecture and navigation",
+        "design systems and style guides",
+        "prototyping interactions"
+      ],
+      "request_phrases": [
+        "how do I know people will understand my layout",
+        "sketching screens before writing any code",
+        "talking to potential customers to learn what they want",
+        "watching someone struggle with my interface and taking notes",
+        "organizing menus so visitors find things"
+      ]
+    },
+    {
+      "id": "technical_documentation",
+      "profile_phrases": [
+        "writing API documentation",
+        "docstrings and README files",
+        "technical writing for engineers",
+        "Sphinx and Markdown docs",
+        "explaining code in plain English",
+        "user manuals for software"
+      ],
+      "request_phrases": [
+        "how do I describe my program so others can use it",
+        "a guide so a newcomer can install my tool",
+        "making my comments in the source actually helpful",
+        "turning my project notes into something readable",
+        "clarifying the architecture simply for folks outside software"
+      ]
+    },
+    {
+      "id": "public_speaking",
+      "profile_phrases": [
+        "giving technical presentations",
+        "slide deck design",
+        "speaking confidently in front of audiences",
+        "pitching ideas to stakeholders",
+        "demo day presentations",
+        "handling Q&A after a talk"
+      ],
+      "request_phrases": [
+        "my voice shakes when I present to a room",
+        "making my visuals less dull",
+        "how to sell my project concept to investors",
+        "closing my walkthrough so it lands well",
+        "fielding hard prompts from the crowd"
+      ]
+    },
+    {
+      "id": "web_backend",
+      "profile_phrases": [
+        "Django models and views",
+        "REST APIs with Flask",
+        "Express.js middleware",
+        "authentication sessions in web backends",
+        "server-side templating",
+        "FastAPI endpoints with validation"
+      ],
+      "request_phrases": [
+        "my website answers with failures whenever my form submits",
+        "building the back office part of my website",
+        "hooking up a database to my site's pages",
+        "logging people in and remembering who they are",
+        "defining routes that accept and check JSON"
+      ]
+    },
+    {
+      "id": "concurrency",
+      "profile_phrases": [
+        "multithreading with locks",
+        "race conditions in shared memory",
+        "async/await in Python",
+        "deadlock avoidance",
+        "thread pools and executors",
+        "parallel map-reduce on clusters"
+      ],
+      "request_phrases": [
+        "two workers keep stepping on each other's data",
+        "my program freezes forever waiting on something",
+        "making several tasks run at the same time without chaos",
+        "speeding up a loop by spreading it across cores",
+        "waiting for slow network calls without blocking everything"
+      ]
+    },
+    {
+      "id": "embedded_systems",
+      "profile_phrases": [
+        "Arduino sensor wiring",
+        "microcontroller firmware in C",
+        "I2C and SPI protocols",
+        "PWM motor control",
+        "Raspberry Pi GPIO projects",
+        "reading analog sensors"
+      ],
+      "request_phrases": [
+        "my breadboard setup misreads the thermometer",
+        "writing code that runs on a tiny chip with no OS",
+        "ramping a servo up slowly rather than jerking it",
+        "connecting two little boards over a shared bus",
+        "making a tiny computer measure real-world voltages"
+      ]
+    }
+  ],
+  "filler_bio_sentences": [
+    "I grew up in a small town by the lake.",
+    "On weekends I like long walks with my dog.",
+    "I am the oldest of four siblings.",
+    "My hometown is famous for its apple orchards.",
+    "I spend a lot of free time reading fantasy novels.",
+    "I came to university from a farm two hours outside the city.",
+    "Most mornings I make a pot of strong coffee before class.",
+    "I have a small herb garden on my apartment balcony.",
+    "I enjoy long road trips with a good playlist.",
+    "Growing up, I played violin in a community orchestra.",
+    "I am originally from a coastal fishing village.",
+    "I like trying restaurants with unusual regional menus.",
+    "My favorite season is autumn because of the colors.",
+    "I volunteer at an animal shelter on Saturdays.",
+    "I was born in a city with four distinct seasons.",
+    "I have two cats named after famous mathematicians.",
+    "I enjoy board games with friends on rainy evenings.",
+    "I still call my grandmother every Sunday.",
+    "I am learning to play the ukulele slowly.",
+    "Before college I worked summers at a bakery.",
+    "I prefer hiking trails to crowded city parks.",
+    "I collect vintage postcards from places I have visited.",
+    "I grew up speaking two languages at home.",
+    "I am a big fan of old black-and-white films.",
+    "My family runs a small hardware store downtown.",
+    "I like to cook big batches of soup for friends.",
+    "I enjoy swimming laps early in the morning.",
+    "I spent a year abroad teaching English to kids.",
+    "I am happiest when I am near the ocean.",
+    "I keep a journal of places I want to travel."
+  ],
+  "interest_phrases": [
+    "board games",
+    "film photography",
+    "ramen cooking",
+    "jazz piano",
+    "rock climbing",
+    "chess tournaments",
+    "trail running",
+    "birdwatching",
+    "community theater",
+    "anime",
+    "gardening",
+    "speedrunning old video games",
+    "cycling",
+    "mystery novels",
+    "bouldering",
+    "history podcasts",
+    "sourdough baking",
+    "recreational soccer",
+    "watercolor painting",
+    "thrifting vintage clothes"
+  ]
+}

@@ -44,11 +44,24 @@ See the [Step 1 baseline audit](docs/STEP_1_AUDIT.md) for verified behavior, lim
 - Get in-app bell notifications for incoming requests, request decisions, and new chat messages. Read/unread state is saved per account.
 - Chat privately after acceptance. Both participants can send messages of up to 2,000 characters, and conversations persist across visits. Open chats refresh every three seconds.
 - Review an advisor after completing advice. Requesters can submit one 1–5 helpfulness rating and an optional comment per completed request, from Outgoing requests or message history. Advisor profiles show the average, review count, and latest course-specific feedback. Apply migrations before using reviews.
+- **Ranked advisor matching:** enter a course and "What do you need help with?" to rank advisors by topic fit, ratings, helpful Q&A answers, and free capacity, with a Best match badge and reasons for each result. Apply migrations and embed profiles first; see [advisor matching](docs/ADVISOR_MATCHING.md) and the [M0 evaluation](eval/README.md).
 
 New request and community tools include cancellation, seven-day expiration,
 a conversation inbox, block/report controls with moderator review, password
 recovery, and meeting proposals with calendar export. See [setup and behavior](docs/COMMUNITY_FEATURES.md),
 including SMTP configuration and moderator assignment.
+
+## Advisor matching
+
+Peer search lists advisors by name. Advisor matching ranks them for a course and
+a short description of what you need, and explains each ranking with reason chips.
+It combines Postgres full-text search, per-field embeddings in pgvector, reviews,
+helpful Q&A answers, and free capacity. Setup, the API, the scoring formula and
+limitations are in [docs/ADVISOR_MATCHING.md](docs/ADVISOR_MATCHING.md). The
+synthetic M0 evaluation that tests whether it beats course-only search is in
+[eval/README.md](eval/README.md).
+
+M0 headline (held-out seed 2): hybrid reaches 68.3% top-3 suitability, against 21.7% for course-only and 22.5% for keyword-only. The new claim (beats keyword-only) passes; the inherited 80% target is not met. See [eval/results.md](eval/results.md) and [eval/README.md](eval/README.md).
 
 ## Tech stack
 

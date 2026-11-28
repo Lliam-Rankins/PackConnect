@@ -67,6 +67,10 @@ cd eval && ../.venv/bin/python -m unittest test_generate -v
 
 ## Seeds
 
+The datasets are not committed. `generate.py` recreates them from the seed and
+`concepts.json`, locally (see below) and in CI. Changing the generator or
+`concepts.json` changes the data, so rerun the eval afterwards.
+
 - **Seed 1 (tuning):** `eval/data/seed1.json`. Used to explore alpha values and to set the quality weights.
 - **Seed 2 (reporting):** `eval/data/seed2.json`. The default data for the
   reported claims.
@@ -86,7 +90,7 @@ docker run -d --name packconnect-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 p
 docker exec packconnect-pg createdb -U postgres packconnect_test
 
 export TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/packconnect_test?sslmode=disable'
-python eval/generate.py --seed 1 --out eval/data/seed1.json    # only if the data is missing
+python eval/generate.py --seed 1 --out eval/data/seed1.json
 python eval/generate.py --seed 2 --out eval/data/seed2.json
 python eval/run_m0.py --tune eval/data/seed1.json
 ```

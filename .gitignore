@@ -28,3 +28,6 @@ frontend/playwright-report/
 frontend/test-results/
 
 .codegraph
+
+# Generated M0 eval data (eval/generate.py)
+eval/data/

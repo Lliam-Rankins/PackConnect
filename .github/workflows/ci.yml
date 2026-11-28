@@ -126,6 +126,11 @@ jobs:
       - name: Run eval tests
         run: python -m unittest discover -s eval -p "test_*.py"
 
+      - name: Generate synthetic eval data
+        run: |
+          python eval/generate.py --seed 1 --out eval/data/seed1.json
+          python eval/generate.py --seed 2 --out eval/data/seed2.json
+
       - name: Run M0 evaluation (reports claims; fails only if the script crashes)
         run: python eval/run_m0.py --tune eval/data/seed1.json
 
